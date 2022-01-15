@@ -7,7 +7,11 @@ pub type Value = f64;
 #[derive(Debug)]
 pub enum Operation {
     Constant(usize),
-    Return,
+
+	Add, Substract, Multiply, Divide,
+	Negate,
+    
+	Return,
 }
 
 impl Operation {
@@ -22,6 +26,11 @@ impl Operation {
             Operation::Constant(constant_offset) => {
                 println!("Constant	{} '{}'", constant_offset, &chunk.constants[*constant_offset])
             }
+            Operation::Add => println!("Add"),
+            Operation::Substract => println!("Substract"),
+            Operation::Multiply => println!("Multiply"),
+            Operation::Divide => println!("Divide"),
+            Operation::Negate => println!("Negate"),
             Operation::Return => println!("Return"),
         }
     }
