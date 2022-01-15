@@ -21,6 +21,8 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn scan_token(&mut self) -> TokenResult {
+		self.skip_whitespaces();
+
         self.start = self.current;
         match self.advance() {
             Some(c) => match c {
@@ -116,6 +118,19 @@ impl<'a> Scanner<'a> {
                     false
                 }
             }
+            None => false,
+        }
+    }
+
+    fn skip_whitespaces(&mut self) {
+        while self.peek_is_whitespace() {
+			self.advance();
+		}
+    }
+
+    fn peek_is_whitespace(&mut self) -> bool {
+        match self.peek() {
+            Some(c) => *c == ' ' || *c == '\t' || *c == '\r',
             None => false,
         }
     }
