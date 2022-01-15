@@ -1,4 +1,4 @@
-use std::{mem, vec};
+use std::vec;
 
 // use std::fmt::Display;
 
@@ -12,7 +12,12 @@ pub enum Operation {
 
 impl Operation {
     pub fn disassemble(&self, chunk: &Chunk, offset: usize) {
-        print!("{:04}	", offset);
+        print!("{:04}  ", offset);
+		if offset > 0 && chunk.lines[offset] == chunk.lines[offset-1] {
+			print!("   | ");
+		} else {
+			print!("{:04} ", chunk.lines[offset]);
+		}
         match self {
             Operation::Constant(constant_offset) => {
                 println!("Constant {}", &chunk.constants[*constant_offset])
@@ -26,6 +31,7 @@ impl Operation {
 pub struct Chunk {
     code: Vec<Operation>,
     constants: Vec<Value>,
+	lines: Vec<u32>
 }
 
 impl Chunk {
@@ -33,11 +39,13 @@ impl Chunk {
         Chunk {
             code: vec![],
             constants: vec![],
+            lines: vec![],
         }
     }
 
-    pub fn write(&mut self, op: Operation) {
+    pub fn write(&mut self, op: Operation, line: u32) {
         self.code.push(op);
+		self.lines.push(line);
     }
 
     pub fn add_constant(&mut self, value: Value) -> usize {
@@ -50,7 +58,7 @@ impl Chunk {
         let mut offset: usize = 0;
         for op in &self.code {
             op.disassemble(self, offset);
-            offset += mem::size_of_val(&op);
+            offset += 1;
         }
     }
 }
