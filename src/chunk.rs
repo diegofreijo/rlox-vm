@@ -44,7 +44,7 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn new() -> Chunk {
+    pub fn new() -> Self {
         Chunk {
             code: vec![],
             constants: vec![],

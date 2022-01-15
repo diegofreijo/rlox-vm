@@ -1,7 +1,9 @@
-use std::io;
+use std::io::{self, Write};
 
 use chunk::Chunk;
 use vm::VM;
+
+use crate::compiler::Compiler;
 
 mod chunk;
 mod vm;
@@ -14,16 +16,21 @@ fn main() {
 }
 
 fn repl() {
-    let mut vm = VM::new();
+    // let mut vm = VM::new();
 
     loop {
         print!("> ");
+        io::stdout().flush().expect("Failed flushing to stdout");
 
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
-                let chunk = Chunk::new();
-                vm.run(chunk);
+                input = input.trim().to_string();
+                let mut compiler = Compiler::new(&input);
+                compiler.test_scanner();
+
+                // let chunk = Chunk::new();
+                // vm.run(chunk);
             }
             Err(error) => println!("error: {}", error),
         }

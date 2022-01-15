@@ -13,7 +13,7 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new() -> VM {
+    pub fn new() -> Self {
         VM {
             stack: vec![],
         }
