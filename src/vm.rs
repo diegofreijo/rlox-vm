@@ -9,32 +9,29 @@ pub enum InterpretResult {
 }
 
 pub struct VM {
-    chunk: Chunk,
-    // ip: usize,
     stack: Vec<Value>,
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> VM {
+    pub fn new() -> VM {
         VM {
-            chunk,
             stack: vec![],
         }
     }
 
-    pub fn run(&mut self) -> InterpretResult {
+    pub fn run(&mut self, chunk: Chunk) -> InterpretResult {
         let mut ret = InterpretResult::RuntimeError;
-        for (ip, op) in self.chunk.code().iter().enumerate() {
+        for (ip, op) in chunk.code().iter().enumerate() {
 
             #[cfg(feature="trace")]
 			{
 				println!("          {:?}", self.stack);
-				op.disassemble(&self.chunk, ip);
+				op.disassemble(&chunk, ip);
 			}
             
 			match op {
                 crate::chunk::Operation::Constant(coffset) => {
-                    let c = self.chunk.read_constant(*coffset);
+                    let c = chunk.read_constant(*coffset);
 					self.stack.push(c);
                 }
 				crate::chunk::Operation::Add => {
