@@ -123,15 +123,19 @@ impl<'a> Scanner<'a> {
     }
 
     fn skip_whitespaces(&mut self) {
-        while self.peek_is_whitespace() {
-			self.advance();
+        loop {
+			match self.peek() {
+				Some(c) => 
+				if *c == ' ' || *c == '\t' || *c == '\r' {
+					self.advance();
+				} else if *c == '\n' {
+					self.line += 1;
+					self.advance();
+				} else {
+					break;
+				},
+				None => break,
+			}
 		}
-    }
-
-    fn peek_is_whitespace(&mut self) -> bool {
-        match self.peek() {
-            Some(c) => *c == ' ' || *c == '\t' || *c == '\r',
-            None => false,
-        }
     }
 }

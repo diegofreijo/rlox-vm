@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    ops::Add,
+};
 
 use chunk::Chunk;
 use vm::VM;
@@ -6,10 +9,10 @@ use vm::VM;
 use crate::compiler::Compiler;
 
 mod chunk;
-mod vm;
 mod compiler;
 mod scanner;
 mod token;
+mod vm;
 
 fn main() {
     repl()
@@ -17,23 +20,37 @@ fn main() {
 
 fn repl() {
     // let mut vm = VM::new();
+    let stdin = io::stdin();
 
     loop {
         print!("> ");
         io::stdout().flush().expect("Failed flushing to stdout");
+        
+        let mut source = String::new();
 
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(_) => {
-                input = input.trim().to_string();
-                let mut compiler = Compiler::new(&input);
-                compiler.test_scanner();
-
-                // let chunk = Chunk::new();
-                // vm.run(chunk);
+        loop {
+            let mut input = String::new();
+            match stdin.read_line(&mut input) {
+                Ok(_) => {
+                    input = input.to_string();
+                    if input.trim().is_empty() {
+                        break;
+                    } else {
+                        source.push_str(&input);
+                    }
+                }
+                Err(error) => {
+                    println!("error: {}", error);
+                    break;
+                }
             }
-            Err(error) => println!("error: {}", error),
         }
+
+        let mut compiler = Compiler::new(&source);
+        compiler.test_scanner();
+
+        // let chunk = Chunk::new();
+        // vm.run(chunk);
     }
 
     // let constant = chunk.add_constant(1.2);
