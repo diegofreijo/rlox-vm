@@ -1,9 +1,9 @@
 use crate::token::{Token, TokenResult, TokenType};
-use std::str::Chars;
+use std::{iter::Peekable, str::Chars};
 
 pub struct Scanner<'a> {
     source: &'a String,
-    chars: Chars<'a>,
+    chars: Peekable<Chars<'a>>,
     start: usize,
     current: usize,
     line: i32,
@@ -12,8 +12,8 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a String) -> Self {
         Scanner {
-            source: source,
-            chars: source.chars(),
+            source,
+            chars: source.chars().peekable(),
             start: 0,
             current: 0,
             line: 1,
@@ -24,6 +24,7 @@ impl<'a> Scanner<'a> {
         self.start = self.current;
         match self.advance() {
             Some(c) => match c {
+                // Single-char tokens
                 '(' => self.make_token(TokenType::LeftParen),
                 ')' => self.make_token(TokenType::RightParen),
                 '{' => self.make_token(TokenType::LeftBrace),
@@ -35,12 +36,33 @@ impl<'a> Scanner<'a> {
                 '+' => self.make_token(TokenType::Plus),
                 '/' => self.make_token(TokenType::Slash),
                 '*' => self.make_token(TokenType::Star),
+
+                // Two-char tokens
+                '!' => self.make_token_if_matches(&'=', TokenType::BangEqual, TokenType::Bang),
+                '=' => self.make_token_if_matches(&'=', TokenType::EqualEqual, TokenType::Equal),
+                '<' => self.make_token_if_matches(&'=', TokenType::LessEqual, TokenType::Less),
+                '>' => self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater),
+
+				// Error
                 _ => TokenResult {
                     line: self.line,
                     data: Err(format!("Unexpected character '{}'", c)),
                 },
             },
             None => self.make_eof(),
+        }
+    }
+
+    fn make_token_if_matches(
+        &mut self,
+        expected: &char,
+        on_match: TokenType,
+        otherwise: TokenType,
+    ) -> TokenResult {
+        if self.matches(expected) {
+            self.make_token(on_match)
+        } else {
+            self.make_token(otherwise)
         }
     }
 
@@ -56,7 +78,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-	fn make_eof(&self) -> TokenResult {
+    fn make_eof(&self) -> TokenResult {
         TokenResult {
             line: self.line,
             data: Ok(Token {
@@ -78,5 +100,23 @@ impl<'a> Scanner<'a> {
     fn advance(&mut self) -> Option<char> {
         self.current += 1;
         self.chars.next()
+    }
+
+    fn peek(&mut self) -> Option<&char> {
+        self.chars.peek()
+    }
+
+    fn matches(&mut self, expected: &char) -> bool {
+        match self.peek() {
+            Some(c) => {
+                if c == expected {
+                    self.advance();
+                    true
+                } else {
+                    false
+                }
+            }
+            None => false,
+        }
     }
 }

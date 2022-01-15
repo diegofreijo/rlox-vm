@@ -24,10 +24,10 @@ pub enum TokenType {
     Semicolon, Slash, Star,
 
     // One or two character s.
-    // Bang, BangEqual,
-    // Equal, EqualEqual,
-    // Greater, GreaterEqual,
-    // Less, LessEqual,
+    Bang, BangEqual,
+    Equal, EqualEqual,
+    Greater, GreaterEqual,
+    Less, LessEqual,
 
     // // Literals.
     // Identifier, String, Number,
