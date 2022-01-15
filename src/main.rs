@@ -1,6 +1,7 @@
 use chunk::Chunk;
+use vm::VM;
 
-mod value;
+mod vm;
 mod chunk;
 
 fn main() {
@@ -12,6 +13,12 @@ fn main() {
     let constant = chunk.add_constant(4.5);
     chunk.write(chunk::Operation::Constant(constant), 123);
     
-    chunk.write(chunk::Operation::Return, 123);
+    chunk.write(chunk::Operation::Return, 124);
     chunk.disassemble("test chunk");
+
+    println!("----------------");
+    println!("Execution starting");
+
+    let vm = VM::new(chunk);
+    vm.run();
 }

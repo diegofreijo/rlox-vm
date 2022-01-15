@@ -2,7 +2,7 @@ use std::vec;
 
 // use std::fmt::Display;
 
-type Value = f64;
+pub type Value = f64;
 
 #[derive(Debug)]
 pub enum Operation {
@@ -12,15 +12,15 @@ pub enum Operation {
 
 impl Operation {
     pub fn disassemble(&self, chunk: &Chunk, offset: usize) {
-        print!("{:04}  ", offset);
+        print!("{:04} ", offset);
 		if offset > 0 && chunk.lines[offset] == chunk.lines[offset-1] {
 			print!("   | ");
 		} else {
-			print!("{:04} ", chunk.lines[offset]);
+			print!("{:4} ", chunk.lines[offset]);
 		}
         match self {
             Operation::Constant(constant_offset) => {
-                println!("Constant {}", &chunk.constants[*constant_offset])
+                println!("Constant	{} '{}'", constant_offset, &chunk.constants[*constant_offset])
             }
             Operation::Return => println!("Return"),
         }
@@ -53,13 +53,22 @@ impl Chunk {
         self.constants.len() - 1
     }
 
+	pub fn read_constant(&self, coffset: usize) -> Value {
+		self.constants[coffset]
+	}
+
     pub fn disassemble(&self, name: &str) {
-        println!("== {} ==\n", name);
+        println!("== {} ==", name);
         let mut offset: usize = 0;
         for op in &self.code {
             op.disassemble(self, offset);
             offset += 1;
         }
+    }
+
+    /// Get a reference to the chunk's code.
+    pub fn code(&self) -> &[Operation] {
+        self.code.as_ref()
     }
 }
 
