@@ -24,10 +24,11 @@ impl<'a> Scanner<'a> {
 
     pub fn scan_token(&mut self) -> TokenResult {
         self.skip_whitespaces();
-
         self.start = self.current;
         match self.advance() {
             Some(c) => match c {
+                _ if Scanner::is_digit(c) => self.number(),
+
                 // Single-char tokens
                 '(' => self.make_token(TokenType::LeftParen),
                 ')' => self.make_token(TokenType::RightParen),
@@ -45,8 +46,9 @@ impl<'a> Scanner<'a> {
                 '!' => self.make_token_if_matches(&'=', TokenType::BangEqual, TokenType::Bang),
                 '=' => self.make_token_if_matches(&'=', TokenType::EqualEqual, TokenType::Equal),
                 '<' => self.make_token_if_matches(&'=', TokenType::LessEqual, TokenType::Less),
-                '>' => self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater),
-                
+                '>' => {
+                    self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater)
+                }
 
                 // String literals
                 '"' => self.string(),
@@ -178,9 +180,9 @@ impl<'a> Scanner<'a> {
     }
 
     fn string(&mut self) -> TokenResult {
-		// I already consumed the initial " before. I'm storing as a lexeme the string
-		// with no "s
-		self.start += 1;
+        // I already consumed the initial " before. I'm storing as a lexeme the string
+        // with no "s
+        self.start += 1;
 
         while !self.peek_matches(&'"') && !self.is_eof() {
             if self.peek_matches(&'\n') {
@@ -193,6 +195,32 @@ impl<'a> Scanner<'a> {
             self.token_error("Unterminated string")
         } else {
             self.make_token(TokenType::String)
+        }
+    }
+
+    fn number(&mut self) -> TokenResult {
+        while self.peek_is_digit() {
+            self.advance();
+        }
+
+        if self.peek_matches(&'.') {
+            self.advance();
+            while self.peek_is_digit() {
+                self.advance();
+            }
+        }
+
+        self.make_token(TokenType::Number)
+    }
+
+    fn is_digit(c: char) -> bool {
+        matches!(c, '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9')
+    }
+
+    fn peek_is_digit(&mut self) -> bool {
+        match self.peek() {
+            Some(c) => Scanner::is_digit(*c),
+            None => false,
         }
     }
 }
@@ -278,12 +306,18 @@ mod tests {
         );
     }
 
-	#[test]
+    #[test]
     fn strings() {
-		assert_token_lexeme(String::from("\"pepe\""), TokenType::String, "pepe");
-		assert_token_lexeme(String::from("\"\""), TokenType::String, "");
-	}
+        assert_token_lexeme(String::from("\"pepe\""), TokenType::String, "pepe");
+        assert_token_lexeme(String::from("\"\""), TokenType::String, "");
+    }
 
+	#[test]
+	fn numbers() {
+		assert_token_lexeme(String::from("4"), TokenType::Number, "4");
+		assert_token_lexeme(String::from("42"), TokenType::Number, "42");
+		assert_token_lexeme(String::from("13.99"), TokenType::Number, "13.99");
+	}
 
     fn assert_token(source: String, expected: TokenType) {
         let mut scanner = scanner::Scanner::new(&source);
@@ -292,11 +326,11 @@ mod tests {
         assert_eq!(token.data.unwrap().token_type, expected);
     }
 
-	fn assert_token_lexeme(source: String, expected_type: TokenType, expected_lexeme: &str) {
+    fn assert_token_lexeme(source: String, expected_type: TokenType, expected_lexeme: &str) {
         let mut scanner = scanner::Scanner::new(&source);
         let token = scanner.scan_token();
-		let data = token.data.unwrap();
-		
+        let data = token.data.unwrap();
+
         assert_eq!(data.token_type, expected_type);
         assert_eq!(data.lexeme, expected_lexeme);
     }
