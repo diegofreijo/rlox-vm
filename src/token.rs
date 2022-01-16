@@ -32,7 +32,7 @@ pub enum TokenType {
     Less, LessEqual,
 
     // // Literals.
-    // Identifier, String, Number,
+    Identifier, String, Number,
 
     // // Keywords.
     // And, Class, Else, False,

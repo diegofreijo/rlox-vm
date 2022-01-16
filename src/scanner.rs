@@ -45,15 +45,14 @@ impl<'a> Scanner<'a> {
                 '!' => self.make_token_if_matches(&'=', TokenType::BangEqual, TokenType::Bang),
                 '=' => self.make_token_if_matches(&'=', TokenType::EqualEqual, TokenType::Equal),
                 '<' => self.make_token_if_matches(&'=', TokenType::LessEqual, TokenType::Less),
-                '>' => {
-                    self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater)
-                }
+                '>' => self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater),
+                
+
+                // String literals
+                '"' => self.string(),
 
                 // Error
-                _ => TokenResult {
-                    line: self.line,
-                    data: Err(format!("Unexpected character '{}'", c)),
-                },
+                _ => self.token_error(&format!("Unexpected character '{}'", c)),
             },
             None => self.make_eof(),
         }
@@ -96,12 +95,12 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    // fn token_error(&self, message: &String) -> Result<Token, TokenError> {
-    //     Err(TokenError {
-    //         lexeme: &message.clone(),
-    //         line: self.line,
-    //     })
-    // }
+    fn token_error(&self, message: &str) -> TokenResult {
+        TokenResult {
+            line: self.line,
+            data: Err(message.to_string()),
+        }
+    }
 
     fn advance(&mut self) -> Option<char> {
         self.current += 1;
@@ -123,9 +122,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-	fn is_eof(&mut self) -> bool {
-		self.peek() == None
-	}
+    fn is_eof(&mut self) -> bool {
+        self.peek() == None
+    }
 
     fn peek_next_matches(&mut self, expected: &char) -> bool {
         match self.peek_next() {
@@ -170,11 +169,30 @@ impl<'a> Scanner<'a> {
                             }
                         }
                     } else {
-						break;
-					}
+                        break;
+                    }
                 }
                 _ => break,
             }
+        }
+    }
+
+    fn string(&mut self) -> TokenResult {
+		// I already consumed the initial " before. I'm storing as a lexeme the string
+		// with no "s
+		self.start += 1;
+
+        while !self.peek_matches(&'"') && !self.is_eof() {
+            if self.peek_matches(&'\n') {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_eof() {
+            self.token_error("Unterminated string")
+        } else {
+            self.make_token(TokenType::String)
         }
     }
 }
@@ -254,14 +272,33 @@ mod tests {
         assert_tokens(String::from("+\n//pepe"), &vec![TokenType::Plus]);
         assert_tokens(String::from("/\n"), &vec![TokenType::Slash]);
         assert_tokens(String::from("/\n//pepe"), &vec![TokenType::Slash]);
-        assert_tokens(String::from("/\n//pepe\n/"), &vec![TokenType::Slash, TokenType::Slash]);
+        assert_tokens(
+            String::from("/\n//pepe\n/"),
+            &vec![TokenType::Slash, TokenType::Slash],
+        );
     }
+
+	#[test]
+    fn strings() {
+		assert_token_lexeme(String::from("\"pepe\""), TokenType::String, "pepe");
+		assert_token_lexeme(String::from("\"\""), TokenType::String, "");
+	}
+
 
     fn assert_token(source: String, expected: TokenType) {
         let mut scanner = scanner::Scanner::new(&source);
         let token = scanner.scan_token();
 
         assert_eq!(token.data.unwrap().token_type, expected);
+    }
+
+	fn assert_token_lexeme(source: String, expected_type: TokenType, expected_lexeme: &str) {
+        let mut scanner = scanner::Scanner::new(&source);
+        let token = scanner.scan_token();
+		let data = token.data.unwrap();
+		
+        assert_eq!(data.token_type, expected_type);
+        assert_eq!(data.lexeme, expected_lexeme);
     }
 
     fn assert_tokens(source: String, expected_tokens: &Vec<TokenType>) {
