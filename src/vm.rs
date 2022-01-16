@@ -4,7 +4,7 @@ use crate::chunk::{Chunk, Value};
 
 pub enum InterpretResult {
     Ok,
-    CompileError,
+    // CompileError,
     RuntimeError,
 }
 

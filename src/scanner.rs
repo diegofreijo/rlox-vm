@@ -101,7 +101,7 @@ impl<'a> Scanner<'a> {
 			"var" => self.make_token(TokenType::Var),
 			"while" => self.make_token(TokenType::While),
 			"false" => self.make_token(TokenType::False),
-			"for" => self.make_token(TokenType::Or),
+			"for" => self.make_token(TokenType::For),
 			"fun" => self.make_token(TokenType::Fun),
 			"this" => self.make_token(TokenType::This),
 			"true" => self.make_token(TokenType::True),

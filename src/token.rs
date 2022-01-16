@@ -1,5 +1,3 @@
-use std::net::ToSocketAddrs;
-
 #[derive(Clone)]
 pub struct TokenResult<'a> {
     pub line: i32,

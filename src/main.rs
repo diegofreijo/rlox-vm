@@ -45,7 +45,7 @@ fn repl() {
             let mut vm = VM::new();
             match vm.run(&compiler.chunk) {
                 vm::InterpretResult::Ok => println!("Ok"),
-                vm::InterpretResult::CompileError => println!("Compile error"),
+                // vm::InterpretResult::CompileError => println!("Compile error"),
                 vm::InterpretResult::RuntimeError => println!("Runtime error"),
             }
         } else {
