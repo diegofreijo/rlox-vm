@@ -1,8 +1,10 @@
-
+#[derive(Clone)]
 pub struct TokenResult<'a> {
     pub line: i32,
     pub data: Result<Token<'a>, String>,
 }
+
+#[derive(Clone)]
 pub struct Token<'a> {
     pub token_type: TokenType,
     pub start: usize,
@@ -15,7 +17,7 @@ pub struct Token<'a> {
 // }
 
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen, RightParen,

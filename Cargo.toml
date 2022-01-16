@@ -10,3 +10,4 @@ default = []
 trace = []
 
 [dependencies]
+peekmore = "1.0.0"

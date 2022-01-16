@@ -1,9 +1,11 @@
+use peekmore::{PeekMore, PeekMoreIterator};
+
 use crate::token::{Token, TokenResult, TokenType};
 use std::{iter::Peekable, str::Chars};
 
 pub struct Scanner<'a> {
     source: &'a String,
-    chars: Peekable<Chars<'a>>,
+    chars: PeekMoreIterator<Chars<'a>>,
     start: usize,
     current: usize,
     line: i32,
@@ -13,7 +15,7 @@ impl<'a> Scanner<'a> {
     pub fn new(source: &'a String) -> Self {
         Scanner {
             source,
-            chars: source.chars().peekable(),
+            chars: source.chars().peekmore(),
             start: 0,
             current: 0,
             line: 1,
@@ -21,7 +23,7 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn scan_token(&mut self) -> TokenResult {
-		self.skip_whitespaces();
+        self.skip_whitespaces();
 
         self.start = self.current;
         match self.advance() {
@@ -43,9 +45,11 @@ impl<'a> Scanner<'a> {
                 '!' => self.make_token_if_matches(&'=', TokenType::BangEqual, TokenType::Bang),
                 '=' => self.make_token_if_matches(&'=', TokenType::EqualEqual, TokenType::Equal),
                 '<' => self.make_token_if_matches(&'=', TokenType::LessEqual, TokenType::Less),
-                '>' => self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater),
+                '>' => {
+                    self.make_token_if_matches(&'=', TokenType::GreaterEqual, TokenType::Greater)
+                }
 
-				// Error
+                // Error
                 _ => TokenResult {
                     line: self.line,
                     data: Err(format!("Unexpected character '{}'", c)),
@@ -108,6 +112,28 @@ impl<'a> Scanner<'a> {
         self.chars.peek()
     }
 
+    fn peek_next(&mut self) -> Option<&char> {
+        self.chars.peek_nth(1)
+    }
+
+    fn peek_matches(&mut self, expected: &char) -> bool {
+        match self.peek() {
+            Some(c) => c == expected,
+            None => false,
+        }
+    }
+
+	fn is_eof(&mut self) -> bool {
+		self.peek() == None
+	}
+
+    fn peek_next_matches(&mut self, expected: &char) -> bool {
+        match self.peek_next() {
+            Some(c) => c == expected,
+            None => false,
+        }
+    }
+
     fn matches(&mut self, expected: &char) -> bool {
         match self.peek() {
             Some(c) => {
@@ -124,18 +150,137 @@ impl<'a> Scanner<'a> {
 
     fn skip_whitespaces(&mut self) {
         loop {
-			match self.peek() {
-				Some(c) => 
-				if *c == ' ' || *c == '\t' || *c == '\r' {
-					self.advance();
-				} else if *c == '\n' {
-					self.line += 1;
-					self.advance();
-				} else {
-					break;
-				},
-				None => break,
-			}
-		}
+            match self.peek() {
+                Some(' ') | Some('\t') | Some('\r') => {
+                    self.advance();
+                }
+                Some('\n') => {
+                    self.line += 1;
+                    self.advance();
+                }
+                Some('/') => {
+                    if self.peek_next_matches(&'/') {
+                        self.advance();
+                        self.advance();
+                        loop {
+                            if self.peek_matches(&'\n') || self.is_eof() {
+                                break;
+                            } else {
+                                self.advance();
+                            }
+                        }
+                    } else {
+						break;
+					}
+                }
+                _ => break,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{scanner, token::TokenType};
+
+    #[test]
+    fn peek() {
+        let source = String::from("1234");
+        let mut scanner = scanner::Scanner::new(&source);
+        assert!(scanner.peek_matches(&'1'));
+
+        assert_eq!(scanner.advance(), Some('1'));
+        assert!(scanner.peek_matches(&'2'));
+        assert!(scanner.peek_next_matches(&'3'));
+
+        assert_eq!(scanner.advance(), Some('2'));
+        assert!(scanner.peek_matches(&'3'));
+        assert!(scanner.peek_next_matches(&'4'));
+    }
+
+    #[test]
+    fn empty_source() {
+        assert_token(String::from(""), TokenType::Eof);
+        assert_token(String::from("    "), TokenType::Eof);
+        assert_token(String::from("\r\t\t 	"), TokenType::Eof);
+        assert_token(String::from("\n"), TokenType::Eof);
+    }
+
+    #[test]
+    fn error_source() {
+        assert_error_token(String::from("%"));
+        assert_error_token(String::from("@"));
+    }
+
+    #[test]
+    fn single_chars() {
+        assert_token(String::from(""), TokenType::Eof);
+        assert_token(String::from("("), TokenType::LeftParen);
+        assert_token(String::from("}"), TokenType::RightBrace);
+        assert_token(String::from("-"), TokenType::Minus);
+        assert_token(String::from("+"), TokenType::Plus);
+        assert_token(String::from("/"), TokenType::Slash);
+    }
+
+    #[test]
+    fn double_chars() {
+        assert_token(String::from("=="), TokenType::EqualEqual);
+        assert_token(String::from("!="), TokenType::BangEqual);
+        assert_token(String::from(">"), TokenType::Greater);
+        assert_token(String::from(">="), TokenType::GreaterEqual);
+    }
+
+    #[test]
+    fn full_source() {
+        assert_tokens(String::from("+-"), &vec![TokenType::Plus, TokenType::Minus]);
+        assert_tokens(
+            String::from("==="),
+            &vec![TokenType::EqualEqual, TokenType::Equal],
+        );
+        assert_tokens(
+            String::from("()\n{}"),
+            &vec![
+                TokenType::LeftParen,
+                TokenType::RightParen,
+                TokenType::LeftBrace,
+                TokenType::RightBrace,
+            ],
+        );
+    }
+
+    #[test]
+    fn coments() {
+        assert_tokens(String::from("//pepe"), &vec![]);
+        assert_tokens(String::from("+\n//pepe"), &vec![TokenType::Plus]);
+        assert_tokens(String::from("/\n"), &vec![TokenType::Slash]);
+        assert_tokens(String::from("/\n//pepe"), &vec![TokenType::Slash]);
+        assert_tokens(String::from("/\n//pepe\n/"), &vec![TokenType::Slash, TokenType::Slash]);
+    }
+
+    fn assert_token(source: String, expected: TokenType) {
+        let mut scanner = scanner::Scanner::new(&source);
+        let token = scanner.scan_token();
+
+        assert_eq!(token.data.unwrap().token_type, expected);
+    }
+
+    fn assert_tokens(source: String, expected_tokens: &Vec<TokenType>) {
+        let mut scanner = scanner::Scanner::new(&source);
+        for expected in expected_tokens {
+            let actual = scanner.scan_token();
+            assert_eq!(actual.data.unwrap().token_type, *expected);
+        }
+
+        assert_eq!(
+            scanner.scan_token().data.unwrap().token_type,
+            TokenType::Eof
+        );
+    }
+
+    fn assert_error_token(source: String) {
+        let mut scanner = scanner::Scanner::new(&source);
+        let token = scanner.scan_token();
+
+        assert!(token.data.is_err());
     }
 }
