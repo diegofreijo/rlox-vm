@@ -1,7 +1,7 @@
 use peekmore::{PeekMore, PeekMoreIterator};
 
 use crate::token::{Token, TokenResult, TokenType};
-use std::{iter::Peekable, str::Chars};
+use std::str::Chars;
 
 pub struct Scanner<'a> {
     source: &'a String,
@@ -27,6 +27,7 @@ impl<'a> Scanner<'a> {
         self.start = self.current;
         match self.advance() {
             Some(c) => match c {
+                _ if Scanner::is_alpha(c) => self.identifier(),
                 _ if Scanner::is_digit(c) => self.number(),
 
                 // Single-char tokens
@@ -84,6 +85,30 @@ impl<'a> Scanner<'a> {
             }),
         }
     }
+
+	fn make_identifier_token(&self) -> TokenResult {
+		let lexeme = &self.source[self.start..self.current];
+		match lexeme {
+			"and" => self.make_token(TokenType::And),
+			"class" => self.make_token(TokenType::Class),
+			"else" => self.make_token(TokenType::Else),
+			"if" => self.make_token(TokenType::If),
+			"nil" => self.make_token(TokenType::Nil),
+			"or" => self.make_token(TokenType::Or),
+			"print" => self.make_token(TokenType::Print),
+			"return" => self.make_token(TokenType::Return),
+			"super" => self.make_token(TokenType::Super),
+			"var" => self.make_token(TokenType::Var),
+			"while" => self.make_token(TokenType::While),
+			"false" => self.make_token(TokenType::False),
+			"for" => self.make_token(TokenType::Or),
+			"fun" => self.make_token(TokenType::Fun),
+			"this" => self.make_token(TokenType::This),
+			"true" => self.make_token(TokenType::True),
+			_ => self.make_token(TokenType::Identifier),
+		}
+		
+	}
 
     fn make_eof(&self) -> TokenResult {
         TokenResult {
@@ -213,16 +238,39 @@ impl<'a> Scanner<'a> {
         self.make_token(TokenType::Number)
     }
 
-    fn is_digit(c: char) -> bool {
-        matches!(c, '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9')
-    }
-
     fn peek_is_digit(&mut self) -> bool {
         match self.peek() {
             Some(c) => Scanner::is_digit(*c),
             None => false,
         }
     }
+
+	fn peek_is_alpha(&mut self) -> bool {
+		match self.peek() {
+            Some(c) => Scanner::is_alpha(*c),
+            None => false,
+        }
+	}
+
+	fn identifier(&mut self) -> TokenResult {
+		while self.peek_is_alpha() || self.peek_is_digit() {
+			self.advance();
+		}
+
+		self.make_identifier_token()
+	}
+
+    fn is_digit(c: char) -> bool {
+        // matches!(c, '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9')
+		c.is_digit(10)
+    }
+
+	fn is_alpha(c: char) -> bool {
+		c == '_' || c.is_ascii_alphabetic() 
+    }
+
+
+
 }
 
 #[cfg(test)]
@@ -314,9 +362,23 @@ mod tests {
 
 	#[test]
 	fn numbers() {
+		assert_token_lexeme(String::from("0"), TokenType::Number, "0");
 		assert_token_lexeme(String::from("4"), TokenType::Number, "4");
 		assert_token_lexeme(String::from("42"), TokenType::Number, "42");
 		assert_token_lexeme(String::from("13.99"), TokenType::Number, "13.99");
+	}
+
+	#[test]
+	fn identifier() {
+		assert_token(String::from("class"), TokenType::Class);
+		assert_token(String::from("if"), TokenType::If);
+		assert_token(String::from("while"), TokenType::While);
+		assert_token(String::from("true"), TokenType::True);
+		assert_token(String::from("false"), TokenType::False);
+	
+		assert_token_lexeme(String::from("pepe"), TokenType::Identifier, "pepe");
+		assert_token_lexeme(String::from("for1"), TokenType::Identifier, "for1");
+		assert_token_lexeme(String::from("whiles"), TokenType::Identifier, "whiles");
 	}
 
     fn assert_token(source: String, expected: TokenType) {

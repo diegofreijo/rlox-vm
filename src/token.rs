@@ -35,10 +35,10 @@ pub enum TokenType {
     Identifier, String, Number,
 
     // // Keywords.
-    // And, Class, Else, False,
-    // For, Fun, If, Nil, Or,
-    // Print, Return, Super, This,
-    // True, Var, While,
+    And, Class, Else, False,
+    For, Fun, If, Nil, Or,
+    Print, Return, Super, This,
+    True, Var, While,
 
     Error, Eof
 } 

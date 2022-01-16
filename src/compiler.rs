@@ -1,6 +1,6 @@
 use crate::{
     scanner::Scanner,
-    token::{TokenResult, TokenType},
+    token::TokenType,
 };
 
 pub struct Compiler<'a> {
