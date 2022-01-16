@@ -22,7 +22,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_token(&mut self) -> TokenResult {
+    pub fn scan_token(&mut self) -> TokenResult<'a> {
         self.skip_whitespaces();
         self.start = self.current;
         match self.advance() {
@@ -66,7 +66,7 @@ impl<'a> Scanner<'a> {
         expected: &char,
         on_match: TokenType,
         otherwise: TokenType,
-    ) -> TokenResult {
+    ) -> TokenResult<'a> {
         if self.matches(expected) {
             self.make_token(on_match)
         } else {
@@ -74,11 +74,11 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn make_token(&self, token_type: TokenType) -> TokenResult {
+    fn make_token(&self, token_type: TokenType) -> TokenResult<'a> {
         TokenResult {
             line: self.line,
+            token_type,
             data: Ok(Token {
-                token_type,
                 start: self.start,
                 end: self.current,
                 lexeme: &self.source[self.start..self.current],
@@ -86,7 +86,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-	fn make_identifier_token(&self) -> TokenResult {
+	fn make_identifier_token(&self) -> TokenResult<'a> {
 		let lexeme = &self.source[self.start..self.current];
 		match lexeme {
 			"and" => self.make_token(TokenType::And),
@@ -110,11 +110,11 @@ impl<'a> Scanner<'a> {
 		
 	}
 
-    fn make_eof(&self) -> TokenResult {
+    fn make_eof(&self) -> TokenResult<'a> {
         TokenResult {
             line: self.line,
+            token_type: TokenType::Eof,
             data: Ok(Token {
-                token_type: TokenType::Eof,
                 start: self.start,
                 end: self.current,
                 lexeme: "",
@@ -122,9 +122,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn token_error(&self, message: &str) -> TokenResult {
+    fn token_error(&self, message: &str) -> TokenResult<'a> {
         TokenResult {
             line: self.line,
+            token_type: TokenType::Error,
             data: Err(message.to_string()),
         }
     }
@@ -204,7 +205,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn string(&mut self) -> TokenResult {
+    fn string(&mut self) -> TokenResult<'a> {
         // I already consumed the initial " before. I'm storing as a lexeme the string
         // with no "s
         self.start += 1;
@@ -223,7 +224,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn number(&mut self) -> TokenResult {
+    fn number(&mut self) -> TokenResult<'a> {
         while self.peek_is_digit() {
             self.advance();
         }
@@ -252,7 +253,7 @@ impl<'a> Scanner<'a> {
         }
 	}
 
-	fn identifier(&mut self) -> TokenResult {
+	fn identifier(&mut self) -> TokenResult<'a> {
 		while self.peek_is_alpha() || self.peek_is_digit() {
 			self.advance();
 		}
@@ -385,7 +386,7 @@ mod tests {
         let mut scanner = scanner::Scanner::new(&source);
         let token = scanner.scan_token();
 
-        assert_eq!(token.data.unwrap().token_type, expected);
+        assert_eq!(token.token_type, expected);
     }
 
     fn assert_token_lexeme(source: String, expected_type: TokenType, expected_lexeme: &str) {
@@ -393,7 +394,7 @@ mod tests {
         let token = scanner.scan_token();
         let data = token.data.unwrap();
 
-        assert_eq!(data.token_type, expected_type);
+        assert_eq!(token.token_type, expected_type);
         assert_eq!(data.lexeme, expected_lexeme);
     }
 
@@ -401,13 +402,10 @@ mod tests {
         let mut scanner = scanner::Scanner::new(&source);
         for expected in expected_tokens {
             let actual = scanner.scan_token();
-            assert_eq!(actual.data.unwrap().token_type, *expected);
+            assert_eq!(actual.token_type, *expected);
         }
 
-        assert_eq!(
-            scanner.scan_token().data.unwrap().token_type,
-            TokenType::Eof
-        );
+        assert_eq!(scanner.scan_token().token_type, TokenType::Eof);
     }
 
     fn assert_error_token(source: String) {

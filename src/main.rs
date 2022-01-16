@@ -1,9 +1,4 @@
-use std::{
-    io::{self, Write},
-    ops::Add,
-};
-
-use chunk::Chunk;
+use std::io::{self, Write};
 use vm::VM;
 
 use crate::compiler::Compiler;
@@ -19,13 +14,12 @@ fn main() {
 }
 
 fn repl() {
-    // let mut vm = VM::new();
     let stdin = io::stdin();
 
     loop {
         print!("> ");
         io::stdout().flush().expect("Failed flushing to stdout");
-        
+
         let mut source = String::new();
 
         loop {
@@ -46,11 +40,17 @@ fn repl() {
             }
         }
 
-        let mut compiler = Compiler::new(&source);
-        compiler.test_scanner();
-
-        // let chunk = Chunk::new();
-        // vm.run(chunk);
+        let compiler = Compiler::from(&source);
+        if !compiler.had_error {
+            let mut vm = VM::new();
+            match vm.run(&compiler.chunk) {
+                vm::InterpretResult::Ok => println!("Ok"),
+                vm::InterpretResult::CompileError => println!("Compile error"),
+                vm::InterpretResult::RuntimeError => println!("Runtime error"),
+            }
+        } else {
+            println!("Compiler error!");
+        }
     }
 
     // let constant = chunk.add_constant(1.2);

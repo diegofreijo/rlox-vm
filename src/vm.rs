@@ -4,7 +4,7 @@ use crate::chunk::{Chunk, Value};
 
 pub enum InterpretResult {
     Ok,
-    // CompileError,
+    CompileError,
     RuntimeError,
 }
 
@@ -19,9 +19,13 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, chunk: Chunk) -> InterpretResult {
+    // pub fn interpret(&mut self, source: &String) {
+
+    // }
+
+    pub fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         let mut ret = InterpretResult::RuntimeError;
-        for (ip, op) in chunk.code().iter().enumerate() {
+        for (_ip, op) in chunk.code().iter().enumerate() {
 
             #[cfg(feature="trace")]
 			{

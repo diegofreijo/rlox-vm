@@ -75,6 +75,10 @@ impl Chunk {
         }
     }
 
+    pub fn emit(&mut self, op: Operation) {
+        self.code.push(op);
+    }
+
     /// Get a reference to the chunk's code.
     pub fn code(&self) -> &[Operation] {
         self.code.as_ref()
