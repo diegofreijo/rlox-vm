@@ -4,7 +4,7 @@ use std::vec;
 
 pub type Value = f64;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Operation {
     Constant(usize),
 
@@ -38,8 +38,8 @@ impl Operation {
 
 // #[derive(Debug)]
 pub struct Chunk {
-    code: Vec<Operation>,
-    constants: Vec<Value>,
+    pub code: Vec<Operation>,
+    pub constants: Vec<Value>,
 	lines: Vec<u32>
 }
 

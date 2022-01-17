@@ -21,7 +21,7 @@ enum Precedence {
 
 impl Precedence {
     fn next(&self) -> Precedence {
-        let ret_order = (self.order()+1).min(10);
+        let ret_order = (self.order() + 1).min(10);
         Precedence::from_order(ret_order)
     }
 
@@ -94,7 +94,7 @@ impl<'a> Compiler<'a> {
 
         self.chunk.emit(Operation::Return);
 
-        #[cfg(feature="debug_print_code")]
+        #[cfg(feature = "debug_print_code")]
         if !ret.had_error {
             ret.chunk.disassemble("code");
         }
@@ -130,16 +130,20 @@ impl<'a> Compiler<'a> {
     fn unary(&mut self) {
         let operator_type = self.previous.token_type;
 
+        self.parse_precedence(&Precedence::Unary);
+
         match operator_type {
             TokenType::Minus => self.chunk.emit(Operation::Negate),
             _ => todo!(),
         }
-
-        self.parse_precedence(&Precedence::Unary);
     }
 
     fn binary(&mut self) {
         let operator_type = self.previous.token_type;
+
+        let next_precedence = Compiler::get_precedence(operator_type).next();
+        self.parse_precedence(&next_precedence);
+
         match operator_type {
             TokenType::Plus => self.chunk.emit(Operation::Add),
             TokenType::Minus => self.chunk.emit(Operation::Substract),
@@ -147,9 +151,6 @@ impl<'a> Compiler<'a> {
             TokenType::Slash => self.chunk.emit(Operation::Divide),
             _ => todo!(),
         }
-
-        let next_precedence = Compiler::get_precedence(operator_type).next();
-        self.parse_precedence(&next_precedence);
     }
 
     fn parse_precedence(&mut self, precedence: &Precedence) {
@@ -235,4 +236,91 @@ impl<'a> Compiler<'a> {
     //         }
     //     }
     // }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chunk::{Operation, Value};
+
+    use super::Compiler;
+
+    #[test]
+    fn constants() {
+        assert_chunk("2", vec![Operation::Constant(0)], vec![2.0]);
+        assert_chunk("42", vec![Operation::Constant(0)], vec![42.0]);
+        assert_chunk("0.1", vec![Operation::Constant(0)], vec![0.1]);
+    }
+
+    #[test]
+    fn unary() {
+        assert_chunk(
+            "-3",
+            vec![Operation::Constant(0), Operation::Negate],
+            vec![3.0],
+        );
+        assert_chunk(
+            "-99.000000",
+            vec![Operation::Constant(0), Operation::Negate],
+            vec![99.0],
+        );
+    }
+
+    #[test]
+    fn binary() {
+        assert_chunk(
+            "3+2",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Add,
+            ],
+            vec![3.0, 2.0],
+        );
+        assert_chunk(
+            "0-1",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Substract,
+            ],
+            vec![0.0, 1.0],
+        );
+        assert_chunk(
+            "5/5",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Divide,
+            ],
+            vec![5.0, 5.0],
+        );
+    }
+
+    #[test]
+    fn precedence() {
+        assert_chunk(
+            "-3 + 2 * 2",
+            vec![
+                Operation::Constant(0),
+                Operation::Negate,
+                Operation::Constant(1),
+                Operation::Constant(2),
+                Operation::Multiply,
+                Operation::Add,
+            ],
+            vec![3.0, 2.0, 2.0],
+        );
+    }
+
+    fn assert_chunk(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
+        let source2 = String::from(source);
+        operations.push(Operation::Return);
+
+        let mut compiler = Compiler::from(&source2);
+        compiler.compile();
+
+        assert!(!compiler.had_error);
+        assert_eq!(compiler.chunk.code, operations);
+        assert_eq!(compiler.chunk.constants, constants);
+    }
 }
