@@ -9,6 +9,7 @@ pub enum Operation {
 	Add, Substract, Multiply, Divide,
     Not,
 	Negate,
+    Print,
     
 	Return,
 }

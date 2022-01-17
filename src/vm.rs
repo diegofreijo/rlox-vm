@@ -81,9 +81,15 @@ impl VM {
                     let v = VM::pop_number(&mut self.stack);
                     self.stack.push(Value::Number(-v));
                 }
+                crate::chunk::Operation::Print => {
+                    println!("{:?}", self.stack.pop().expect("Tried to print a non-existing value"));
+                },
                 crate::chunk::Operation::Return => {
-                    // println!("{:?}", &self.stack.pop().unwrap());
-                    ret = InterpretResult::Ok(self.stack.pop().unwrap());
+                    match self.stack.pop() {
+                        Some(val) => ret = InterpretResult::Ok(val),
+                        None => ret = InterpretResult::Ok(Value::Nil),
+                    }
+                    
                     break;
                 }
             }
@@ -101,27 +107,17 @@ impl VM {
         stack.push(result);
     }
 
-    // fn binary_string<F>(stack: &mut Vec<Value>, implementation: F)
-    // where
-    //     F: Fn(&String, &String) -> Value,
-    // {
-    //     let b = VM::pop_string(stack);
-    //     let a = VM::pop_string(stack);
-    //     let result = implementation(a, b);
-    //     stack.push(result);
-    // }
-
     fn pop_number(stack: &mut Vec<Value>) -> f64 {
         match stack.pop().unwrap() {
             Value::Number(num) => num,
-            other => panic!("Expected a Number but popped the value {:?}", other),
+            other => panic!("Expected a Number but found the value {:?}", other),
         }
     }
 
     fn pop_string(stack: &mut Vec<Value>) -> Rc<ObjString> {
         match stack.pop().unwrap() {
             Value::String(rc) => rc,
-            other => panic!("Expected a Number but popped the value {:?}", other),
+            other => panic!("Expected a String but found the value {:?}", other),
         }
     }
 

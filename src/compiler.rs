@@ -84,8 +84,10 @@ impl<'a> Compiler<'a> {
 
     pub fn compile(&mut self) {
         self.advance();
-        self.expression();
-        self.consume(TokenType::Eof, "Expect end of expression");
+
+        while !self.matches(TokenType::Eof) {
+            self.declaration();
+        }
 
         self.chunk.emit(Operation::Return);
 
@@ -180,15 +182,26 @@ impl<'a> Compiler<'a> {
     }
 
 
-    fn parse_precedence(&mut self, precedence: &Precedence) {
-        self.advance();
-        self.prefix_rule(self.previous.token_type);
+    fn declaration(&mut self) {
+        self.statement();
+    }
 
-        while precedence <= &Compiler::get_precedence(self.current.token_type) {
-            self.advance();
-            self.infix_rule(self.previous.token_type);
+    fn statement(&mut self) {
+        if self.matches(TokenType::Print) {
+            self.print_statement();
+        } else {
+            panic!("Invalid statement token: {:?}", self.current);
         }
     }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon, "Expect ';' after value");
+        self.chunk.emit(Operation::Print);
+    }
+
+
+
 
     fn consume(&mut self, expected: TokenType, message: &str) {
         if self.current.token_type == expected {
@@ -197,6 +210,21 @@ impl<'a> Compiler<'a> {
             self.error_at_current(message);
         }
     }
+
+    fn matches(&mut self, expected: TokenType) -> bool {
+        if self.check(expected) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn check(&self, expected: TokenType) -> bool {
+        self.current.token_type == expected
+    }
+
+
 
     fn error_at_current(&mut self, message: &str) {
         self.error_at(self.current.line, message);
@@ -207,6 +235,16 @@ impl<'a> Compiler<'a> {
             self.panic_mode = true;
             println!("[line {}] Error: {}", line, message);
             self.had_error = true;
+        }
+    }
+
+    fn parse_precedence(&mut self, precedence: &Precedence) {
+        self.advance();
+        self.prefix_rule(self.previous.token_type);
+
+        while precedence <= &Compiler::get_precedence(self.current.token_type) {
+            self.advance();
+            self.infix_rule(self.previous.token_type);
         }
     }
 
@@ -255,29 +293,6 @@ impl<'a> Compiler<'a> {
             _ => Precedence::None,
         }
     }
-
-    // pub fn test_scanner(&mut self) {
-    //     let mut line = -1;
-    //     loop {
-    //         let res = self.scanner.scan_token();
-    //         if res.line != line {
-    //             print!("{:4} ", res.line);
-    //             line = res.line;
-    //         } else {
-    //             print!("   | ");
-    //         }
-    //
-    //         match res.data {
-    //             Ok(token) => {
-    //                 println!("{:?}		'{}'", token.token_type, token.lexeme);
-    //                 if token.token_type == TokenType::Eof {
-    //                     break;
-    //                 }
-    //             }
-    //             Err(message) => println!("Error '{}'", message),
-    //         }
-    //     }
-    // }
 }
 
 #[cfg(test)]

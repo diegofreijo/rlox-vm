@@ -7,6 +7,9 @@ fn expresions() {
 	assert_expression("1+2", Value::Number(3.0));
 	assert_expression("!nil", Value::Boolean(true));
 	assert_expression("!(5 - 4 > 3 * 2 == !nil)", Value::Boolean(true));
+	assert_expression("\"asd\" +\"qwe \"", Value::new_string("asdqwe "));
+	assert_expression("\"asd\" == \"asd\"", Value::Boolean(true));
+	assert_expression("\"asd\" != \"asd\"", Value::Boolean(true));
 }
 
 
