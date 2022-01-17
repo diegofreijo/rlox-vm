@@ -1,4 +1,4 @@
-use rlox_vm::{chunk::Value, compiler::Compiler, vm::{VM, InterpretResult}};
+use rlox_vm::{value::Value, compiler::Compiler, vm::{VM, InterpretResult}};
 
 
 #[test]

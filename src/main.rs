@@ -26,7 +26,7 @@ fn repl() {
                     if input.trim().is_empty() {
                         break;
                     } else {
-                        source.push_str(&input);
+                        source.push_str(&input.trim_end());
                     }
                 }
                 Err(error) => {
@@ -41,7 +41,7 @@ fn repl() {
         if !compiler.had_error {
             let mut vm = VM::new();
             let result = vm.run(&compiler.chunk);
-            print!("{:?}", result);
+            println!("{:?}", result);
         } else {
             println!("Compiler error!");
         }

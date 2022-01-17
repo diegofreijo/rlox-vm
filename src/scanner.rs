@@ -218,9 +218,11 @@ impl<'a> Scanner<'a> {
         }
 
         if self.is_eof() {
-            self.token_error("Unterminated string")
+            self.token_error(&format!("Unterminated string. Token so far: {:?}", self.make_token(TokenType::String)))
         } else {
-            self.make_token(TokenType::String)
+            let ret = self.make_token(TokenType::String);
+            self.advance();
+            ret
         }
     }
 
@@ -267,7 +269,7 @@ impl<'a> Scanner<'a> {
     }
 
 	fn is_alpha(c: char) -> bool {
-		c == '_' || c.is_ascii_alphabetic() 
+		 c == '_' || ('A'..'z').contains(&c)
     }
 
 
@@ -358,6 +360,8 @@ mod tests {
     #[test]
     fn strings() {
         assert_token_lexeme(String::from("\"pepe\""), TokenType::String, "pepe");
+        assert_token_lexeme(String::from("\"pepe\"\n"), TokenType::String, "pepe");
+        assert_token_lexeme(String::from("\"pepe\"\n\n"), TokenType::String, "pepe");
         assert_token_lexeme(String::from("\"\""), TokenType::String, "");
     }
 

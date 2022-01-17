@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenResult<'a> {
     pub line: i32,
     pub token_type: TokenType,
@@ -25,7 +25,7 @@ impl<'a> TokenResult<'a> {
     // }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token<'a> {
     pub start: usize,
     pub end: usize,

@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use crate::{
-    chunk::{Chunk, Operation, Value},
+    chunk::{Chunk, Operation},
     scanner::Scanner,
-    token::{TokenResult, TokenType},
+    token::{TokenResult, TokenType}, value::{Value, ObjString},
 };
 
 #[derive(Clone, PartialEq, PartialOrd)]
@@ -162,7 +164,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-
     fn literal(&mut self) {
         match self.previous.token_type {
             TokenType::True => self.chunk.emit(Operation::True),
@@ -171,6 +172,13 @@ impl<'a> Compiler<'a> {
             tt => panic!("Expected a literal, found {:?}", tt),
         }
     }
+
+    fn string(&mut self) {
+        let s = self.previous.data.clone().unwrap().lexeme;
+        let obj_str = ObjString::from(s);
+        self.chunk.emit_constant(Value::String(Rc::from(obj_str)));
+    }
+
 
     fn parse_precedence(&mut self, precedence: &Precedence) {
         self.advance();
@@ -211,6 +219,7 @@ impl<'a> Compiler<'a> {
             TokenType::False => self.literal(),
             TokenType::Nil => self.literal(),
             TokenType::Bang => self.unary(),
+            TokenType::String => self.string(),
             _ => panic!("Expect expresion"),
         }
     }
@@ -247,7 +256,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-
     // pub fn test_scanner(&mut self) {
     //     let mut line = -1;
     //     loop {
@@ -274,7 +282,7 @@ impl<'a> Compiler<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::chunk::{Operation, Value};
+    use crate::{chunk::Operation, value::Value};
 
     use super::Compiler;
 
@@ -291,6 +299,7 @@ mod tests {
             vec![Operation::Constant(0)],
             vec![Value::Number(0.1)],
         );
+        assert_chunk("\"pepe\"", vec![Operation::Constant(0)], vec![Value::new_string("pepe")]);
     }
 
     #[test]

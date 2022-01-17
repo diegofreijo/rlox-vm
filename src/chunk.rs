@@ -1,13 +1,4 @@
-use std::vec;
-
-// use std::fmt::Display;
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Value {
-    Number(f64),
-    Boolean(bool),
-    Nil,
-}
+use crate::value::Value;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operation {
