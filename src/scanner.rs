@@ -391,6 +391,8 @@ mod tests {
         let token = scanner.scan_token();
 
         assert_eq!(token.token_type, expected);
+        
+        assert_eq!(scanner.scan_token().token_type, TokenType::Eof);
     }
 
     fn assert_token_lexeme(source: String, expected_type: TokenType, expected_lexeme: &str) {
@@ -400,6 +402,8 @@ mod tests {
 
         assert_eq!(token.token_type, expected_type);
         assert_eq!(data.lexeme, expected_lexeme);
+        
+        assert_eq!(scanner.scan_token().token_type, TokenType::Eof);
     }
 
     fn assert_tokens(source: String, expected_tokens: &Vec<TokenType>) {
