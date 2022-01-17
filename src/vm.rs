@@ -30,7 +30,7 @@ impl VM {
             #[cfg(feature="trace")]
 			{
 				println!("          {:?}", self.stack);
-				op.disassemble(&chunk, ip);
+				op.disassemble(&chunk, _ip);
 			}
             
 			match op {

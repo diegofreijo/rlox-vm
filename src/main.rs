@@ -40,7 +40,8 @@ fn repl() {
             }
         }
 
-        let compiler = Compiler::from(&source);
+        let mut compiler = Compiler::from(&source);
+        compiler.compile();
         if !compiler.had_error {
             let mut vm = VM::new();
             match vm.run(&compiler.chunk) {

@@ -4,7 +4,7 @@ use crate::{
     token::{TokenResult, TokenType},
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd)]
 enum Precedence {
     None,
     Assignment, // =
@@ -21,18 +21,40 @@ enum Precedence {
 
 impl Precedence {
     fn next(&self) -> Precedence {
+        let ret_order = (self.order()+1).min(10);
+        Precedence::from_order(ret_order)
+    }
+
+    fn order(&self) -> u8 {
         match self {
-            Precedence::None => Precedence::Assignment,
-            Precedence::Assignment => Precedence::Or,
-            Precedence::Or => Precedence::And,
-            Precedence::And => Precedence::Equality,
-            Precedence::Equality => Precedence::Comparison,
-            Precedence::Comparison => Precedence::Term,
-            Precedence::Term => Precedence::Factor,
-            Precedence::Factor => Precedence::Unary,
-            Precedence::Unary => Precedence::Call,
-            Precedence::Call => Precedence::Primary,
-            Precedence::Primary => Precedence::Primary,
+            Precedence::None => 0,
+            Precedence::Assignment => 1,
+            Precedence::Or => 2,
+            Precedence::And => 3,
+            Precedence::Equality => 4,
+            Precedence::Comparison => 5,
+            Precedence::Term => 6,
+            Precedence::Factor => 7,
+            Precedence::Unary => 8,
+            Precedence::Call => 9,
+            Precedence::Primary => 10,
+        }
+    }
+
+    fn from_order(order: u8) -> Precedence {
+        match order {
+            0 => Precedence::None,
+            1 => Precedence::Assignment,
+            2 => Precedence::Or,
+            3 => Precedence::And,
+            4 => Precedence::Equality,
+            5 => Precedence::Comparison,
+            6 => Precedence::Term,
+            7 => Precedence::Factor,
+            8 => Precedence::Unary,
+            9 => Precedence::Call,
+            10 => Precedence::Primary,
+            _ => panic!("Unrecognized order {}", order),
         }
     }
 }
@@ -55,22 +77,27 @@ pub struct Compiler<'a> {
 
 impl<'a> Compiler<'a> {
     pub fn from(source: &'a String) -> Compiler<'a> {
-        let mut ret = Compiler {
+        Compiler {
             scanner: Scanner::new(&source),
             previous: TokenResult::invalid(),
             current: TokenResult::invalid(),
             had_error: false,
             panic_mode: false,
             chunk: Chunk::new(),
-        };
+        }
+    }
 
-        ret.advance();
-        ret.expression();
-        ret.consume(TokenType::Eof, "Expect end of expression");
+    pub fn compile(&mut self) {
+        self.advance();
+        self.expression();
+        self.consume(TokenType::Eof, "Expect end of expression");
 
-        ret.chunk.emit(Operation::Return);
+        self.chunk.emit(Operation::Return);
 
-        ret
+        #[cfg(feature="debug_print_code")]
+        if !ret.had_error {
+            ret.chunk.disassemble("code");
+        }
     }
 
     fn advance(&mut self) {
@@ -128,6 +155,11 @@ impl<'a> Compiler<'a> {
     fn parse_precedence(&mut self, precedence: &Precedence) {
         self.advance();
         self.prefix_rule(self.previous.token_type);
+
+        while precedence <= &Compiler::get_precedence(self.current.token_type) {
+            self.advance();
+            self.infix_rule(self.previous.token_type);
+        }
     }
 
     fn consume(&mut self, expected: TokenType, message: &str) {
@@ -150,46 +182,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // fn get_rule<'b>(operator_type: TokenType) -> ParseRule<'a> {
-    //     match operator_type {
-    //         TokenType::LeftParen => ParseRule {
-    //             prefix: Some(Compiler::grouping),
-    //             infix: None,
-    //             precedence: Precedence::None,
-    //         },
-    //         TokenType::Minus => ParseRule {
-    //             prefix: Some(Compiler::unary),
-    //             infix: Some(Compiler::binary),
-    //             precedence: Precedence::Term,
-    //         },
-    //         TokenType::Plus => ParseRule {
-    //             prefix: None,
-    //             infix: Some(Compiler::binary),
-    //             precedence: Precedence::Term,
-    //         },
-    //         TokenType::Slash => ParseRule {
-    //             prefix: None,
-    //             infix: Some(Compiler::binary),
-    //             precedence: Precedence::Factor,
-    //         },
-    //         TokenType::Star => ParseRule {
-    //             prefix: None,
-    //             infix: Some(Compiler::binary),
-    //             precedence: Precedence::Factor,
-    //         },
-    //         TokenType::Number => ParseRule {
-    //             prefix: Some(Compiler::number),
-    //             infix: None,
-    //             precedence: Precedence::None,
-    //         },
-    //         _ => ParseRule {
-    //             prefix: None,
-    //             infix: None,
-    //             precedence: Precedence::None,
-    //         },
-    //     }
-    // }
-
     fn get_precedence(operator_type: TokenType) -> Precedence {
         match operator_type {
             TokenType::LeftParen => Precedence::None,
@@ -207,6 +199,16 @@ impl<'a> Compiler<'a> {
             TokenType::LeftParen => self.grouping(),
             TokenType::Minus => self.unary(),
             TokenType::Number => self.number(),
+            _ => panic!("Expect expresion"),
+        }
+    }
+
+    fn infix_rule(&mut self, operator_type: TokenType) {
+        match operator_type {
+            TokenType::Minus => self.binary(),
+            TokenType::Plus => self.binary(),
+            TokenType::Slash => self.binary(),
+            TokenType::Star => self.binary(),
             _ => panic!("Expect expresion"),
         }
     }
