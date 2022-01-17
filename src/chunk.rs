@@ -13,6 +13,8 @@ pub enum Value {
 pub enum Operation {
     Constant(usize), Nil, True, False,
 
+    Equal, Greater, Less,
+
 	Add, Substract, Multiply, Divide,
     Not,
 	Negate,

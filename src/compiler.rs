@@ -139,6 +139,21 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(&next_precedence);
 
         match operator_type {
+            TokenType::BangEqual => {
+                self.chunk.emit(Operation::Equal);
+                self.chunk.emit(Operation::Not);
+            },
+            TokenType::EqualEqual => self.chunk.emit(Operation::Equal),
+            TokenType::Greater => self.chunk.emit(Operation::Greater),
+            TokenType::GreaterEqual => {
+                self.chunk.emit(Operation::Less);
+                self.chunk.emit(Operation::Not);
+            },
+            TokenType::Less => self.chunk.emit(Operation::Less),
+            TokenType::LessEqual => {
+                self.chunk.emit(Operation::Greater);
+                self.chunk.emit(Operation::Not);
+            },
             TokenType::Plus => self.chunk.emit(Operation::Add),
             TokenType::Minus => self.chunk.emit(Operation::Substract),
             TokenType::Star => self.chunk.emit(Operation::Multiply),
@@ -187,18 +202,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn get_precedence(operator_type: TokenType) -> Precedence {
-        match operator_type {
-            TokenType::LeftParen => Precedence::None,
-            TokenType::Minus => Precedence::Term,
-            TokenType::Plus => Precedence::Term,
-            TokenType::Slash => Precedence::Factor,
-            TokenType::Star => Precedence::Factor,
-            TokenType::Number => Precedence::None,
-            _ => Precedence::None,
-        }
-    }
-
     fn prefix_rule(&mut self, operator_type: TokenType) {
         match operator_type {
             TokenType::LeftParen => self.grouping(),
@@ -218,7 +221,29 @@ impl<'a> Compiler<'a> {
             TokenType::Plus => self.binary(),
             TokenType::Slash => self.binary(),
             TokenType::Star => self.binary(),
+            TokenType::BangEqual => self.binary(),
+            TokenType::EqualEqual => self.binary(),
+            TokenType::Greater => self.binary(),
+            TokenType::GreaterEqual => self.binary(),
+            TokenType::Less => self.binary(),
+            TokenType::LessEqual => self.binary(),
             _ => panic!("Expect expresion"),
+        }
+    }
+
+    fn get_precedence(operator_type: TokenType) -> Precedence {
+        match operator_type {
+            TokenType::Minus => Precedence::Term,
+            TokenType::Plus => Precedence::Term,
+            TokenType::Slash => Precedence::Factor,
+            TokenType::Star => Precedence::Factor,
+            TokenType::BangEqual => Precedence::Equality,
+            TokenType::EqualEqual => Precedence::Equality,
+            TokenType::Greater => Precedence::Comparison,
+            TokenType::GreaterEqual => Precedence::Comparison,
+            TokenType::Less => Precedence::Comparison,
+            TokenType::LessEqual => Precedence::Comparison,
+            _ => Precedence::None,
         }
     }
 

@@ -18,10 +18,6 @@ impl VM {
         VM { stack: vec![] }
     }
 
-    // pub fn interpret(&mut self, source: &String) {
-
-    // }
-
     pub fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         let mut ret = InterpretResult::RuntimeError;
         for (_ip, op) in chunk.code().iter().enumerate() {
@@ -36,20 +32,31 @@ impl VM {
                     let c = chunk.read_constant(*coffset);
                     self.stack.push(*c);
                 }
+                crate::chunk::Operation::Nil => self.stack.push(Value::Nil),
                 crate::chunk::Operation::True => self.stack.push(Value::Boolean(true)),
                 crate::chunk::Operation::False => self.stack.push(Value::Boolean(false)),
-                crate::chunk::Operation::Nil => self.stack.push(Value::Nil),
+                crate::chunk::Operation::Equal => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(Value::Boolean(a == b));
+                },
+                crate::chunk::Operation::Greater => {
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b));
+                }
+                crate::chunk::Operation::Less => {
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b));
+                }
                 crate::chunk::Operation::Add => {
-                    VM::binary(&mut self.stack, |a, b| a + b);
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a + b));
                 }
                 crate::chunk::Operation::Substract => {
-                    VM::binary(&mut self.stack, |a, b| a - b);
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b));
                 }
                 crate::chunk::Operation::Multiply => {
-                    VM::binary(&mut self.stack, |a, b| a * b);
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b));
                 }
                 crate::chunk::Operation::Divide => {
-                    VM::binary(&mut self.stack, |a, b| a / b);
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b));
                 }
                 crate::chunk::Operation::Not => {
                     let old = self.stack.pop().unwrap();
@@ -72,12 +79,12 @@ impl VM {
 
     fn binary<F>(stack: &mut Vec<Value>, implementation: F)
     where
-        F: Fn(f64, f64) -> f64,
+        F: Fn(f64, f64) -> Value,
     {
         let b = VM::pop_number(stack);
         let a = VM::pop_number(stack);
         let result = implementation(a, b);
-        stack.push(Value::Number(result));
+        stack.push(result);
     }
 
     fn pop_number(stack: &mut Vec<Value>) -> f64 {
