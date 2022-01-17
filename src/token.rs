@@ -33,7 +33,7 @@ pub struct Token<'a> {
 }
 
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen, RightParen,

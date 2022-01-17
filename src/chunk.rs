@@ -79,6 +79,11 @@ impl Chunk {
         self.code.push(op);
     }
 
+    pub fn emit_constant(&mut self, val: Value) {
+        let constant = self.add_constant(val);
+        self.emit(Operation::Constant(constant));
+    }
+
     /// Get a reference to the chunk's code.
     pub fn code(&self) -> &[Operation] {
         self.code.as_ref()
