@@ -1,13 +1,9 @@
+extern crate rlox_vm;
+
 use std::io::{self, Write};
-use vm::VM;
+use rlox_vm::vm::VM;
+use rlox_vm::compiler::Compiler;
 
-use crate::compiler::Compiler;
-
-mod chunk;
-mod compiler;
-mod scanner;
-mod token;
-mod vm;
 
 fn main() {
     repl()
@@ -44,11 +40,8 @@ fn repl() {
         compiler.compile();
         if !compiler.had_error {
             let mut vm = VM::new();
-            match vm.run(&compiler.chunk) {
-                vm::InterpretResult::Ok => println!("Ok"),
-                // vm::InterpretResult::CompileError => println!("Compile error"),
-                vm::InterpretResult::RuntimeError => println!("Runtime error"),
-            }
+            let result = vm.run(&compiler.chunk);
+            print!("{:?}", result);
         } else {
             println!("Compiler error!");
         }

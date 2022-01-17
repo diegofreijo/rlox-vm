@@ -3,8 +3,9 @@ use std::vec;
 
 use crate::chunk::{Chunk, Value};
 
+#[derive(Debug, PartialEq)]
 pub enum InterpretResult {
-    Ok,
+    Ok(Value),
     // CompileError,
     RuntimeError,
 }
@@ -68,8 +69,8 @@ impl VM {
                     self.stack.push(Value::Number(-v));
                 }
                 crate::chunk::Operation::Return => {
-                    println!("{:?}", &self.stack.pop().unwrap());
-                    ret = InterpretResult::Ok;
+                    // println!("{:?}", &self.stack.pop().unwrap());
+                    ret = InterpretResult::Ok(self.stack.pop().unwrap());
                     break;
                 }
             }
