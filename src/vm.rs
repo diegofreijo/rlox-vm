@@ -1,3 +1,4 @@
+use core::panic;
 use std::vec;
 
 use crate::chunk::{Chunk, Value};
@@ -36,7 +37,7 @@ impl VM {
 			match op {
                 crate::chunk::Operation::Constant(coffset) => {
                     let c = chunk.read_constant(*coffset);
-					self.stack.push(c);
+					self.stack.push(*c);
                 }
 				crate::chunk::Operation::Add => {
 					VM::binary(&mut self.stack, |a,b| a+b);
@@ -51,11 +52,11 @@ impl VM {
 					VM::binary(&mut self.stack, |a,b| a/b);
 				},
     			crate::chunk::Operation::Negate => {
-					let v = self.stack.pop().unwrap();
-					self.stack.push(-v);
+                    let v = VM::pop_number(&mut self.stack);
+                    self.stack.push(Value::Number(-v));
 				},
                 crate::chunk::Operation::Return => {
-					println!("{}", &self.stack.pop().unwrap());
+					println!("{:?}", &self.stack.pop().unwrap());
                     ret = InterpretResult::Ok;
                     break;
                 }
@@ -64,9 +65,18 @@ impl VM {
         ret
     }
 
-    fn binary<F>(stack: &mut Vec<f64>, implementation: F) where F: Fn(Value, Value) -> Value {
-        let b = stack.pop().unwrap();
-		let a = stack.pop().unwrap();
-		stack.push(implementation(a,b));
+    fn binary<F>(stack: &mut Vec<Value>, implementation: F) where F: Fn(f64, f64) -> f64 {
+        let b = VM::pop_number(stack);
+		let a = VM::pop_number(stack);
+        let result = implementation(a,b);
+		stack.push(Value::Number(result));
+    }
+
+    fn pop_number(stack: &mut Vec<Value>) -> f64 {
+        if let Value::Number(num) = stack.pop().unwrap(){
+            num
+        } else {
+            panic!("Expected a Number but popped some other value");
+        }
     }
 }

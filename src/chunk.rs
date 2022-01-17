@@ -2,7 +2,11 @@ use std::vec;
 
 // use std::fmt::Display;
 
-pub type Value = f64;
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Value {
+    Number(f64),
+    Boolean(bool),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operation {
@@ -24,7 +28,7 @@ impl Operation {
 		}
         match self {
             Operation::Constant(constant_offset) => {
-                println!("Constant	{} '{}'", constant_offset, &chunk.constants[*constant_offset])
+                println!("Constant	{} '{:?}'", constant_offset, &chunk.constants[*constant_offset])
             }
             Operation::Add => println!("Add"),
             Operation::Substract => println!("Substract"),
@@ -62,8 +66,8 @@ impl Chunk {
         self.constants.len() - 1
     }
 
-	pub fn read_constant(&self, coffset: usize) -> Value {
-		self.constants[coffset]
+	pub fn read_constant(&self, coffset: usize) -> &Value {
+		&self.constants[coffset]
 	}
 
     pub fn disassemble(&self, name: &str) {

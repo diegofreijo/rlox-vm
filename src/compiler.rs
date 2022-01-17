@@ -1,5 +1,5 @@
 use crate::{
-    chunk::{Chunk, Operation},
+    chunk::{Chunk, Operation, Value},
     scanner::Scanner,
     token::{TokenResult, TokenType},
 };
@@ -119,7 +119,7 @@ impl<'a> Compiler<'a> {
     fn number(&mut self) {
         let token_data = self.previous.data.as_ref().unwrap();
         let val = token_data.lexeme.parse::<f64>().unwrap();
-        self.chunk.emit_constant(val);
+        self.chunk.emit_constant(Value::Number(val));
     }
 
     fn grouping(&mut self) {
@@ -246,9 +246,17 @@ mod tests {
 
     #[test]
     fn constants() {
-        assert_chunk("2", vec![Operation::Constant(0)], vec![2.0]);
-        assert_chunk("42", vec![Operation::Constant(0)], vec![42.0]);
-        assert_chunk("0.1", vec![Operation::Constant(0)], vec![0.1]);
+        assert_chunk("2", vec![Operation::Constant(0)], vec![Value::Number(2.0)]);
+        assert_chunk(
+            "42",
+            vec![Operation::Constant(0)],
+            vec![Value::Number(42.0)],
+        );
+        assert_chunk(
+            "0.1",
+            vec![Operation::Constant(0)],
+            vec![Value::Number(0.1)],
+        );
     }
 
     #[test]
@@ -256,12 +264,12 @@ mod tests {
         assert_chunk(
             "-3",
             vec![Operation::Constant(0), Operation::Negate],
-            vec![3.0],
+            vec![Value::Number(3.0)],
         );
         assert_chunk(
             "-99.000000",
             vec![Operation::Constant(0), Operation::Negate],
-            vec![99.0],
+            vec![Value::Number(99.0)],
         );
     }
 
@@ -274,7 +282,7 @@ mod tests {
                 Operation::Constant(1),
                 Operation::Add,
             ],
-            vec![3.0, 2.0],
+            vec![Value::Number(3.0), Value::Number(2.0)],
         );
         assert_chunk(
             "0-1",
@@ -283,7 +291,7 @@ mod tests {
                 Operation::Constant(1),
                 Operation::Substract,
             ],
-            vec![0.0, 1.0],
+            vec![Value::Number(0.0), Value::Number(1.0)],
         );
         assert_chunk(
             "5/5",
@@ -292,10 +300,9 @@ mod tests {
                 Operation::Constant(1),
                 Operation::Divide,
             ],
-            vec![5.0, 5.0],
+            vec![Value::Number(5.0), Value::Number(5.0)],
         );
     }
-
 
     #[test]
     fn parens() {
@@ -306,9 +313,9 @@ mod tests {
                 Operation::Constant(1),
                 Operation::Constant(2),
                 Operation::Add,
-                Operation::Multiply
+                Operation::Multiply,
             ],
-            vec![2.0, 3.0, 2.0],
+            vec![Value::Number(2.0), Value::Number(3.0), Value::Number(2.0)],
         );
         assert_chunk(
             "(3+2)-(2+2)",
@@ -321,7 +328,12 @@ mod tests {
                 Operation::Add,
                 Operation::Substract,
             ],
-            vec![3.0, 2.0, 2.0, 2.0],
+            vec![
+                Value::Number(3.0),
+                Value::Number(2.0),
+                Value::Number(2.0),
+                Value::Number(2.0),
+            ],
         );
     }
 
@@ -337,7 +349,27 @@ mod tests {
                 Operation::Multiply,
                 Operation::Add,
             ],
-            vec![3.0, 2.0, 2.0],
+            vec![Value::Number(3.0), Value::Number(2.0), Value::Number(2.0)],
+        );
+        assert_chunk(
+            "(-1 + 2) * 3 - -4",
+            vec![
+                Operation::Constant(0),
+                Operation::Negate,
+                Operation::Constant(1),
+                Operation::Add,
+                Operation::Constant(2),
+                Operation::Multiply,
+                Operation::Constant(3),
+                Operation::Negate,
+                Operation::Substract,
+            ],
+            vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+                Value::Number(4.0),
+            ],
         );
     }
 
