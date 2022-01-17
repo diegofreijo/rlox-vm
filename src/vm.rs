@@ -82,14 +82,13 @@ impl VM {
                     self.stack.push(Value::Number(-v));
                 }
                 crate::chunk::Operation::Print => {
-                    println!("{:?}", self.stack.pop().expect("Tried to print a non-existing value"));
+                    println!("{}", self.stack.pop().expect("Tried to print a non-existing value"));
                 },
                 crate::chunk::Operation::Return => {
                     match self.stack.pop() {
                         Some(val) => ret = InterpretResult::Ok(val),
                         None => ret = InterpretResult::Ok(Value::Nil),
                     }
-                    
                     break;
                 }
             }

@@ -1,7 +1,7 @@
 extern crate rlox_vm;
 
 use std::io::{self, Write};
-use rlox_vm::vm::VM;
+use rlox_vm::vm::{VM};
 use rlox_vm::compiler::Compiler;
 
 
@@ -40,8 +40,8 @@ fn repl() {
         compiler.compile();
         if !compiler.had_error {
             let mut vm = VM::new();
-            let result = vm.run(&compiler.chunk);
-            println!("{:?}", result);
+            let _result = vm.run(&compiler.chunk);
+            // println!("{:?}", result);
         } else {
             println!("Compiler error!");
         }
