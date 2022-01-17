@@ -6,13 +6,15 @@ use std::vec;
 pub enum Value {
     Number(f64),
     Boolean(bool),
+    Nil,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operation {
-    Constant(usize),
+    Constant(usize), Nil, True, False,
 
 	Add, Substract, Multiply, Divide,
+    Not,
 	Negate,
     
 	Return,
@@ -30,12 +32,7 @@ impl Operation {
             Operation::Constant(constant_offset) => {
                 println!("Constant	{} '{:?}'", constant_offset, &chunk.constants[*constant_offset])
             }
-            Operation::Add => println!("Add"),
-            Operation::Substract => println!("Substract"),
-            Operation::Multiply => println!("Multiply"),
-            Operation::Divide => println!("Divide"),
-            Operation::Negate => println!("Negate"),
-            Operation::Return => println!("Return"),
+            op => println!("{:?}", op),
         }
     }
 }

@@ -59,13 +59,6 @@ impl Precedence {
     }
 }
 
-// #[derive(Clone)]
-// struct ParseRule<'a> {
-//     prefix: Option<fn(&'a mut Compiler<'a>) -> ()>,
-//     infix: Option<fn(&'a mut Compiler<'a>) -> ()>,
-//     precedence: Precedence,
-// }
-
 pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     previous: TokenResult<'a>,
@@ -134,6 +127,7 @@ impl<'a> Compiler<'a> {
 
         match operator_type {
             TokenType::Minus => self.chunk.emit(Operation::Negate),
+            TokenType::Bang => self.chunk.emit(Operation::Not),
             _ => todo!(),
         }
     }
@@ -150,6 +144,16 @@ impl<'a> Compiler<'a> {
             TokenType::Star => self.chunk.emit(Operation::Multiply),
             TokenType::Slash => self.chunk.emit(Operation::Divide),
             _ => todo!(),
+        }
+    }
+
+
+    fn literal(&mut self) {
+        match self.previous.token_type {
+            TokenType::True => self.chunk.emit(Operation::True),
+            TokenType::False => self.chunk.emit(Operation::False),
+            TokenType::Nil => self.chunk.emit(Operation::Nil),
+            tt => panic!("Expected a literal, found {:?}", tt),
         }
     }
 
@@ -200,6 +204,10 @@ impl<'a> Compiler<'a> {
             TokenType::LeftParen => self.grouping(),
             TokenType::Minus => self.unary(),
             TokenType::Number => self.number(),
+            TokenType::True => self.literal(),
+            TokenType::False => self.literal(),
+            TokenType::Nil => self.literal(),
+            TokenType::Bang => self.unary(),
             _ => panic!("Expect expresion"),
         }
     }
@@ -213,6 +221,7 @@ impl<'a> Compiler<'a> {
             _ => panic!("Expect expresion"),
         }
     }
+
 
     // pub fn test_scanner(&mut self) {
     //     let mut line = -1;
