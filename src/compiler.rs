@@ -296,6 +296,35 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn parens() {
+        assert_chunk(
+            "2 * (3+2)",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Constant(2),
+                Operation::Add,
+                Operation::Multiply
+            ],
+            vec![2.0, 3.0, 2.0],
+        );
+        assert_chunk(
+            "(3+2)-(2+2)",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Add,
+                Operation::Constant(2),
+                Operation::Constant(3),
+                Operation::Add,
+                Operation::Substract,
+            ],
+            vec![3.0, 2.0, 2.0, 2.0],
+        );
+    }
+
     #[test]
     fn precedence() {
         assert_chunk(
