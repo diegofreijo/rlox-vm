@@ -330,7 +330,6 @@ impl<'a> Compiler<'a> {
     }
 
     fn prefix_rule(&mut self, operator_type: TokenType, can_assign: bool) {
-        println!("can_assign {}", can_assign);
         match operator_type {
             TokenType::LeftParen => self.grouping(),
             TokenType::Minus => self.unary(),
@@ -387,18 +386,18 @@ mod tests {
 
     #[test]
     fn constants() {
-        assert_chunk("2;", vec![Operation::Constant(0)], vec![Value::Number(2.0)]);
-        assert_chunk(
+        assert_expression("2;", vec![Operation::Constant(0)], vec![Value::Number(2.0)]);
+        assert_expression(
             "42;",
             vec![Operation::Constant(0)],
             vec![Value::Number(42.0)],
         );
-        assert_chunk(
+        assert_expression(
             "0.1;",
             vec![Operation::Constant(0)],
             vec![Value::Number(0.1)],
         );
-        assert_chunk(
+        assert_expression(
             "\"pepe\";",
             vec![Operation::Constant(0)],
             vec![Value::new_string("pepe")],
@@ -407,13 +406,13 @@ mod tests {
 
     #[test]
     fn unary() {
-        assert_chunk(
-            "-3",
+        assert_expression(
+            "-3;",
             vec![Operation::Constant(0), Operation::Negate],
             vec![Value::Number(3.0)],
         );
-        assert_chunk(
-            "-99.000000",
+        assert_expression(
+            "-99.000000;",
             vec![Operation::Constant(0), Operation::Negate],
             vec![Value::Number(99.0)],
         );
@@ -421,8 +420,8 @@ mod tests {
 
     #[test]
     fn binary() {
-        assert_chunk(
-            "3+2",
+        assert_expression(
+            "3+2;",
             vec![
                 Operation::Constant(0),
                 Operation::Constant(1),
@@ -430,8 +429,8 @@ mod tests {
             ],
             vec![Value::Number(3.0), Value::Number(2.0)],
         );
-        assert_chunk(
-            "0-1",
+        assert_expression(
+            "0-1;",
             vec![
                 Operation::Constant(0),
                 Operation::Constant(1),
@@ -439,8 +438,8 @@ mod tests {
             ],
             vec![Value::Number(0.0), Value::Number(1.0)],
         );
-        assert_chunk(
-            "5/5",
+        assert_expression(
+            "5/5;",
             vec![
                 Operation::Constant(0),
                 Operation::Constant(1),
@@ -452,8 +451,8 @@ mod tests {
 
     #[test]
     fn parens() {
-        assert_chunk(
-            "2 * (3+2)",
+        assert_expression(
+            "2 * (3+2);",
             vec![
                 Operation::Constant(0),
                 Operation::Constant(1),
@@ -463,8 +462,8 @@ mod tests {
             ],
             vec![Value::Number(2.0), Value::Number(3.0), Value::Number(2.0)],
         );
-        assert_chunk(
-            "(3+2)-(2+2)",
+        assert_expression(
+            "(3+2)-(2+2);",
             vec![
                 Operation::Constant(0),
                 Operation::Constant(1),
@@ -485,8 +484,8 @@ mod tests {
 
     #[test]
     fn precedence() {
-        assert_chunk(
-            "-3 + 2 * 2",
+        assert_expression(
+            "-3 + 2 * 2;",
             vec![
                 Operation::Constant(0),
                 Operation::Negate,
@@ -497,8 +496,8 @@ mod tests {
             ],
             vec![Value::Number(3.0), Value::Number(2.0), Value::Number(2.0)],
         );
-        assert_chunk(
-            "(-1 + 2) * 3 - -4",
+        assert_expression(
+            "(-1 + 2) * 3 - -4;",
             vec![
                 Operation::Constant(0),
                 Operation::Negate,
@@ -569,6 +568,11 @@ mod tests {
             ],
             vec![Value::Number(1.0)],
         );
+    }
+
+    fn assert_expression(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
+        operations.push(Operation::Pop);
+        assert_chunk(source, operations, constants);
     }
 
     fn assert_chunk(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
