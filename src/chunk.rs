@@ -11,6 +11,7 @@ pub enum Operation {
     Pop,
     GetGlobal(IdentifierName),
     DefineGlobal(IdentifierName),
+    SetGlobal(IdentifierName),
 
     Equal, Greater, Less,
 

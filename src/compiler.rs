@@ -229,7 +229,6 @@ impl<'a> Compiler<'a> {
     fn parse_variable(&mut self, error_message: &str) -> IdentifierName {
         self.consume(TokenType::Identifier, error_message);
         // TODO: see how can I remove this clone()
-        // self.identifier_constant(self.previous.clone().data.unwrap().lexeme)
         self.previous.clone().data.unwrap().lexeme.to_string()
     }
 
@@ -242,16 +241,24 @@ impl<'a> Compiler<'a> {
         self.chunk.emit(Operation::DefineGlobal(global));
     }
 
-    fn variable(&mut self) {
+    fn variable(&mut self, can_assign: bool) {
         // self.named_variable(self.previous);
         // let iid = self.identifier_constant(self.previous.clone().data.unwrap().lexeme);
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
-        self.chunk.emit(Operation::GetGlobal(name));
+        self.named_variable(name, can_assign);
     }
 
-    // fn named_variable(&mut self, previous: TokenResult) {
-    //     todo!()
-    // }
+    fn named_variable(&mut self, name: String, can_assign: bool) {
+        if can_assign && self.matches(TokenType::Equal) {
+            self.expression();
+        }
+
+        if self.matches(TokenType::Equal) {
+            self.chunk.emit(Operation::SetGlobal(name));
+        } else {
+            self.chunk.emit(Operation::GetGlobal(name));
+        }
+    }
 
 
     fn consume(&mut self, expected: TokenType, message: &str) {
@@ -315,7 +322,9 @@ impl<'a> Compiler<'a> {
 
     fn parse_precedence(&mut self, precedence: &Precedence) {
         self.advance();
-        self.prefix_rule(self.previous.token_type);
+
+        let can_assign = *precedence <= Precedence::Assignment;
+        self.prefix_rule(self.current.token_type, can_assign);
 
         while precedence <= &Compiler::get_precedence(self.current.token_type) {
             self.advance();
@@ -323,7 +332,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn prefix_rule(&mut self, operator_type: TokenType) {
+    fn prefix_rule(&mut self, operator_type: TokenType, can_assign: bool) {
         match operator_type {
             TokenType::LeftParen => self.grouping(),
             TokenType::Minus => self.unary(),
@@ -333,7 +342,7 @@ impl<'a> Compiler<'a> {
             TokenType::Nil => self.literal(),
             TokenType::Bang => self.unary(),
             TokenType::String => self.string(),
-            TokenType::Identifier => self.variable(),
+            TokenType::Identifier => self.variable(can_assign),
             _ => panic!("Expect expresion"),
         }
     }

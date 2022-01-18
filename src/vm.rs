@@ -47,7 +47,10 @@ impl VM {
                     self.stack.pop().expect("There was nothing to pop");
                 }
                 crate::chunk::Operation::GetGlobal(name) => {
-                    let val = self.globals.get(name).expect(&format!("Undefined variable '{}'", name));
+                    let val = self
+                        .globals
+                        .get(name)
+                        .expect(&format!("Undefined variable '{}'", name));
                     self.stack.push(val.clone());
                 }
                 crate::chunk::Operation::DefineGlobal(name) => {
@@ -55,6 +58,13 @@ impl VM {
                     // let name = VM::pop_string(&mut self.stack);
                     // self.globals
                     //     .insert(String::from(name.value()), self.stack.pop().unwrap());
+                }
+                crate::chunk::Operation::SetGlobal(name) => {
+                    if self.globals.contains_key(name) {
+                        self.globals.insert(name.clone(), self.stack.pop().unwrap());
+                    } else {
+                        panic!("Undefined variable '{}'", name);
+                    }
                 }
                 crate::chunk::Operation::Equal => {
                     let b = self.stack.pop().unwrap();
