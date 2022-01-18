@@ -61,7 +61,7 @@ impl VM {
                 }
                 crate::chunk::Operation::SetGlobal(name) => {
                     if self.globals.contains_key(name) {
-                        self.globals.insert(name.clone(), self.stack.pop().unwrap());
+                        self.globals.insert(name.clone(), self.peek_stack().unwrap().clone());
                     } else {
                         panic!("Undefined variable '{}'", name);
                     }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    chunk::{Chunk, Operation, IdentifierId, IdentifierName},
+    chunk::{Chunk, Operation, IdentifierName},
     scanner::Scanner,
     token::{TokenResult, TokenType},
     value::{ObjString, Value},
@@ -251,9 +251,6 @@ impl<'a> Compiler<'a> {
     fn named_variable(&mut self, name: String, can_assign: bool) {
         if can_assign && self.matches(TokenType::Equal) {
             self.expression();
-        }
-
-        if self.matches(TokenType::Equal) {
             self.chunk.emit(Operation::SetGlobal(name));
         } else {
             self.chunk.emit(Operation::GetGlobal(name));
@@ -324,7 +321,7 @@ impl<'a> Compiler<'a> {
         self.advance();
 
         let can_assign = *precedence <= Precedence::Assignment;
-        self.prefix_rule(self.current.token_type, can_assign);
+        self.prefix_rule(self.previous.token_type, can_assign);
 
         while precedence <= &Compiler::get_precedence(self.current.token_type) {
             self.advance();
@@ -333,6 +330,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn prefix_rule(&mut self, operator_type: TokenType, can_assign: bool) {
+        println!("can_assign {}", can_assign);
         match operator_type {
             TokenType::LeftParen => self.grouping(),
             TokenType::Minus => self.unary(),
@@ -343,7 +341,7 @@ impl<'a> Compiler<'a> {
             TokenType::Bang => self.unary(),
             TokenType::String => self.string(),
             TokenType::Identifier => self.variable(can_assign),
-            _ => panic!("Expect expresion"),
+            tt => panic!("Expected expresion, got {:?}", tt),
         }
     }
 
@@ -359,7 +357,7 @@ impl<'a> Compiler<'a> {
             TokenType::GreaterEqual => self.binary(),
             TokenType::Less => self.binary(),
             TokenType::LessEqual => self.binary(),
-            _ => panic!("Expect expresion"),
+            _ => (),//panic!("Expect expresion"),
         }
     }
 
@@ -389,19 +387,19 @@ mod tests {
 
     #[test]
     fn constants() {
-        assert_chunk("2", vec![Operation::Constant(0)], vec![Value::Number(2.0)]);
+        assert_chunk("2;", vec![Operation::Constant(0)], vec![Value::Number(2.0)]);
         assert_chunk(
-            "42",
+            "42;",
             vec![Operation::Constant(0)],
             vec![Value::Number(42.0)],
         );
         assert_chunk(
-            "0.1",
+            "0.1;",
             vec![Operation::Constant(0)],
             vec![Value::Number(0.1)],
         );
         assert_chunk(
-            "\"pepe\"",
+            "\"pepe\";",
             vec![Operation::Constant(0)],
             vec![Value::new_string("pepe")],
         );
@@ -518,6 +516,58 @@ mod tests {
                 Value::Number(3.0),
                 Value::Number(4.0),
             ],
+        );
+    }
+
+
+    #[test]
+    fn global_vars() {
+        assert_chunk(
+            "var a;",
+            vec![
+                Operation::Nil,
+                Operation::DefineGlobal("a".to_string()),
+            ],
+            vec![            ],
+        );
+        assert_chunk(
+            "var a = 1;",
+            vec![
+                Operation::Constant(0),
+                Operation::DefineGlobal("a".to_string()),
+            ],
+            vec![Value::Number(1.0)],
+        );
+        assert_chunk(
+            "var a = 1; a;",
+            vec![
+                Operation::Constant(0),
+                Operation::DefineGlobal("a".to_string()),
+                Operation::GetGlobal("a".to_string()),
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0)],
+        );
+        assert_chunk(
+            "var a = 1; a = 2;",
+            vec![
+                Operation::Constant(0),
+                Operation::DefineGlobal("a".to_string()),
+                Operation::Constant(1),
+                Operation::SetGlobal("a".to_string()),
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0),Value::Number(2.0)],
+        );
+        assert_chunk(
+            "var a = 1; var b = a;",
+            vec![
+                Operation::Constant(0),
+                Operation::DefineGlobal("a".to_string()),
+                Operation::GetGlobal("a".to_string()),
+                Operation::DefineGlobal("b".to_string()),
+            ],
+            vec![Value::Number(1.0)],
         );
     }
 
