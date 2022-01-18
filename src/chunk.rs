@@ -1,8 +1,16 @@
 use crate::value::Value;
 
+
+pub type IdentifierId = usize;
+pub type IdentifierName = String;
+
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operation {
-    Constant(usize), Nil, True, False,
+    Constant(IdentifierId), Nil, True, False,
+    Pop,
+    GetGlobal(IdentifierName),
+    DefineGlobal(IdentifierName),
 
     Equal, Greater, Less,
 
@@ -52,7 +60,7 @@ impl Chunk {
 		self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: Value) -> usize {
+    pub fn add_constant(&mut self, value: Value) -> IdentifierId {
         self.constants.push(value);
         self.constants.len() - 1
     }

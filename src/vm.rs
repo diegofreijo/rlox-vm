@@ -1,8 +1,8 @@
 use core::panic;
-use std::{vec, rc::Rc};
+use std::{collections::HashMap, rc::Rc, vec};
 
 use crate::{
-    chunk::{Chunk},
+    chunk::{Chunk, IdentifierName},
     value::{ObjString, Value},
 };
 
@@ -15,11 +15,15 @@ pub enum InterpretResult {
 
 pub struct VM {
     stack: Vec<Value>,
+    globals: HashMap<IdentifierName, Value>,
 }
 
 impl VM {
     pub fn new() -> Self {
-        VM { stack: vec![] }
+        VM {
+            stack: vec![],
+            globals: HashMap::new(),
+        }
     }
 
     pub fn run(&mut self, chunk: &Chunk) -> InterpretResult {
@@ -32,13 +36,26 @@ impl VM {
             }
 
             match op {
-                crate::chunk::Operation::Constant(coffset) => {
-                    let c = chunk.read_constant(*coffset);
+                crate::chunk::Operation::Constant(iid) => {
+                    let c = chunk.read_constant(*iid);
                     self.stack.push(c.clone());
                 }
                 crate::chunk::Operation::Nil => self.stack.push(Value::Nil),
                 crate::chunk::Operation::True => self.stack.push(Value::Boolean(true)),
                 crate::chunk::Operation::False => self.stack.push(Value::Boolean(false)),
+                crate::chunk::Operation::Pop => {
+                    self.stack.pop().expect("There was nothing to pop");
+                }
+                crate::chunk::Operation::GetGlobal(name) => {
+                    let val = self.globals.get(name).expect(&format!("Undefined variable '{}'", name));
+                    self.stack.push(val.clone());
+                }
+                crate::chunk::Operation::DefineGlobal(name) => {
+                    self.globals.insert(name.clone(), self.stack.pop().unwrap());
+                    // let name = VM::pop_string(&mut self.stack);
+                    // self.globals
+                    //     .insert(String::from(name.value()), self.stack.pop().unwrap());
+                }
                 crate::chunk::Operation::Equal => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
@@ -51,13 +68,11 @@ impl VM {
                     VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b));
                 }
                 crate::chunk::Operation::Add => match self.peek_stack().unwrap() {
-                    Value::Number(_) => {
-                        VM::binary(&mut self.stack, |a, b| Value::Number(a + b))
-                    }
+                    Value::Number(_) => VM::binary(&mut self.stack, |a, b| Value::Number(a + b)),
                     Value::String(_) => {
                         let b = VM::pop_string(&mut self.stack);
                         let a = VM::pop_string(&mut self.stack);
-                        let result = format!("{}{}",a.value(),b.value());
+                        let result = format!("{}{}", a.value(), b.value());
                         let value = Value::String(Rc::from(ObjString::from_owned(result)));
                         self.stack.push(value);
                     }
@@ -82,8 +97,13 @@ impl VM {
                     self.stack.push(Value::Number(-v));
                 }
                 crate::chunk::Operation::Print => {
-                    println!("{}", self.stack.pop().expect("Tried to print a non-existing value"));
-                },
+                    println!(
+                        "{}",
+                        self.stack
+                            .pop()
+                            .expect("Tried to print a non-existing value")
+                    );
+                }
                 crate::chunk::Operation::Return => {
                     match self.stack.pop() {
                         Some(val) => ret = InterpretResult::Ok(val),

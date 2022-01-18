@@ -1,9 +1,10 @@
 use std::rc::Rc;
 
 use crate::{
-    chunk::{Chunk, Operation},
+    chunk::{Chunk, Operation, IdentifierId, IdentifierName},
     scanner::Scanner,
-    token::{TokenResult, TokenType}, value::{Value, ObjString},
+    token::{TokenResult, TokenType},
+    value::{ObjString, Value},
 };
 
 #[derive(Clone, PartialEq, PartialOrd)]
@@ -146,18 +147,18 @@ impl<'a> Compiler<'a> {
             TokenType::BangEqual => {
                 self.chunk.emit(Operation::Equal);
                 self.chunk.emit(Operation::Not);
-            },
+            }
             TokenType::EqualEqual => self.chunk.emit(Operation::Equal),
             TokenType::Greater => self.chunk.emit(Operation::Greater),
             TokenType::GreaterEqual => {
                 self.chunk.emit(Operation::Less);
                 self.chunk.emit(Operation::Not);
-            },
+            }
             TokenType::Less => self.chunk.emit(Operation::Less),
             TokenType::LessEqual => {
                 self.chunk.emit(Operation::Greater);
                 self.chunk.emit(Operation::Not);
-            },
+            }
             TokenType::Plus => self.chunk.emit(Operation::Add),
             TokenType::Minus => self.chunk.emit(Operation::Substract),
             TokenType::Star => self.chunk.emit(Operation::Multiply),
@@ -181,26 +182,76 @@ impl<'a> Compiler<'a> {
         self.chunk.emit_constant(Value::String(Rc::from(obj_str)));
     }
 
-
     fn declaration(&mut self) {
-        self.statement();
+        if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
     }
 
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
         } else {
-            panic!("Invalid statement token: {:?}", self.current);
+            self.expression_statement();
         }
+    }
+
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
+        self.chunk.emit(Operation::Pop);
     }
 
     fn print_statement(&mut self) {
         self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after value");
+        self.consume(TokenType::Semicolon, "Expect ';' after value.");
         self.chunk.emit(Operation::Print);
     }
 
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
 
+        if self.matches(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.chunk.emit(Operation::Nil);
+        }
+        self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.");
+        self.define_variable(global);
+    }
+
+    fn parse_variable(&mut self, error_message: &str) -> IdentifierName {
+        self.consume(TokenType::Identifier, error_message);
+        // TODO: see how can I remove this clone()
+        // self.identifier_constant(self.previous.clone().data.unwrap().lexeme)
+        self.previous.clone().data.unwrap().lexeme.to_string()
+    }
+
+    // fn identifier_constant(&mut self, name: &str) -> IdentifierId {
+    //     self.chunk.add_constant(Value::new_string(name))
+    // }
+
+
+    fn define_variable(&mut self, global: IdentifierName) {
+        self.chunk.emit(Operation::DefineGlobal(global));
+    }
+
+    fn variable(&mut self) {
+        // self.named_variable(self.previous);
+        // let iid = self.identifier_constant(self.previous.clone().data.unwrap().lexeme);
+        let name = self.previous.clone().data.unwrap().lexeme.to_string();
+        self.chunk.emit(Operation::GetGlobal(name));
+    }
+
+    // fn named_variable(&mut self, previous: TokenResult) {
+    //     todo!()
+    // }
 
 
     fn consume(&mut self, expected: TokenType, message: &str) {
@@ -224,8 +275,6 @@ impl<'a> Compiler<'a> {
         self.current.token_type == expected
     }
 
-
-
     fn error_at_current(&mut self, message: &str) {
         self.error_at(self.current.line, message);
     }
@@ -235,6 +284,32 @@ impl<'a> Compiler<'a> {
             self.panic_mode = true;
             println!("[line {}] Error: {}", line, message);
             self.had_error = true;
+        }
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+
+        while self.current.token_type != TokenType::Eof {
+            if self.previous.token_type == TokenType::Semicolon {
+                break;
+            }
+
+            match self.current.token_type {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => {
+                    break;
+                }
+                _ => {}
+            }
+
+            self.advance();
         }
     }
 
@@ -258,6 +333,7 @@ impl<'a> Compiler<'a> {
             TokenType::Nil => self.literal(),
             TokenType::Bang => self.unary(),
             TokenType::String => self.string(),
+            TokenType::Identifier => self.variable(),
             _ => panic!("Expect expresion"),
         }
     }
@@ -293,6 +369,7 @@ impl<'a> Compiler<'a> {
             _ => Precedence::None,
         }
     }
+
 }
 
 #[cfg(test)]
@@ -314,7 +391,11 @@ mod tests {
             vec![Operation::Constant(0)],
             vec![Value::Number(0.1)],
         );
-        assert_chunk("\"pepe\"", vec![Operation::Constant(0)], vec![Value::new_string("pepe")]);
+        assert_chunk(
+            "\"pepe\"",
+            vec![Operation::Constant(0)],
+            vec![Value::new_string("pepe")],
+        );
     }
 
     #[test]

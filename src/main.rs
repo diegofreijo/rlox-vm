@@ -10,8 +10,8 @@ fn main() {
 }
 
 fn repl() {
+    let mut vm = VM::new();
     let stdin = io::stdin();
-
     loop {
         print!("> ");
         io::stdout().flush().expect("Failed flushing to stdout");
@@ -39,7 +39,6 @@ fn repl() {
         let mut compiler = Compiler::from(&source);
         compiler.compile();
         if !compiler.had_error {
-            let mut vm = VM::new();
             let _result = vm.run(&compiler.chunk);
             // println!("{:?}", result);
         } else {
