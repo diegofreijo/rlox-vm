@@ -61,10 +61,29 @@ impl VM {
                 }
                 crate::chunk::Operation::SetGlobal(name) => {
                     if self.globals.contains_key(name) {
-                        self.globals.insert(name.clone(), self.peek_stack().unwrap().clone());
+                        self.globals
+                            .insert(name.clone(), self.peek_stack().unwrap().clone());
                     } else {
                         panic!("Undefined variable '{}'", name);
                     }
+                }
+                crate::chunk::Operation::GetLocal(i) => {
+                    // let stack_index = self.stack.len() - 1 - i;
+                    let val = self
+                        .stack
+                        .get(*i)
+                        .expect("Local variable not found in the stack")
+                        .clone();
+                    self.stack.push(val);
+                }
+                crate::chunk::Operation::SetLocal(i) => {
+                    // let stack_index = self.stack.len() - 1 - i;
+                    let val = self
+                        .stack
+                        .last()
+                        .expect("Expression not found in the stack to assign to local")
+                        .clone();
+                    self.stack[*i] = val;
                 }
                 crate::chunk::Operation::Equal => {
                     let b = self.stack.pop().unwrap();

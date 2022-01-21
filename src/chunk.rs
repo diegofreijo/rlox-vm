@@ -3,6 +3,7 @@ use crate::value::Value;
 
 pub type IdentifierId = usize;
 pub type IdentifierName = String;
+pub type LocalVarIndex = usize;
 
 
 #[derive(Debug, PartialEq, Eq)]
@@ -12,6 +13,9 @@ pub enum Operation {
     GetGlobal(IdentifierName),
     DefineGlobal(IdentifierName),
     SetGlobal(IdentifierName),
+    
+    GetLocal(LocalVarIndex),
+    SetLocal(LocalVarIndex),
 
     Equal, Greater, Less,
 

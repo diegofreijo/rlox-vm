@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use crate::{
-    chunk::{Chunk, Operation, IdentifierName},
+    chunk::{Chunk, IdentifierName, LocalVarIndex, Operation},
     scanner::Scanner,
     token::{TokenResult, TokenType},
     value::{ObjString, Value},
 };
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum Precedence {
     None,
     Assignment, // =
@@ -62,24 +62,40 @@ impl Precedence {
     }
 }
 
+struct Local {
+    pub name: String,
+    pub depth: i8,
+}
+
 pub struct Compiler<'a> {
-    scanner: Scanner<'a>,
-    previous: TokenResult<'a>,
-    current: TokenResult<'a>,
+    pub chunk: Chunk,
+
     pub had_error: bool,
     panic_mode: bool,
-    pub chunk: Chunk,
+
+    scanner: Scanner<'a>,
+
+    previous: TokenResult<'a>,
+    current: TokenResult<'a>,
+
+    locals: Vec<Local>,
+    scope_depth: i8,
 }
 
 impl<'a> Compiler<'a> {
     pub fn from(source: &'a String) -> Compiler<'a> {
         Compiler {
+            chunk: Chunk::new(),
+
+            had_error: false,
+            panic_mode: false,
+
             scanner: Scanner::new(&source),
             previous: TokenResult::invalid(),
             current: TokenResult::invalid(),
-            had_error: false,
-            panic_mode: false,
-            chunk: Chunk::new(),
+
+            locals: vec![],
+            scope_depth: 0,
         }
     }
 
@@ -115,6 +131,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn number(&mut self) {
+        // println!("Parsing number");
         let token_data = self.previous.data.as_ref().unwrap();
         let val = token_data.lexeme.parse::<f64>().unwrap();
         self.chunk.emit_constant(Value::Number(val));
@@ -197,6 +214,10 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        } else if self.matches(TokenType::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
         } else {
             self.expression_statement();
         }
@@ -215,48 +236,96 @@ impl<'a> Compiler<'a> {
     }
 
     fn var_declaration(&mut self) {
-        let global = self.parse_variable("Expect variable name.");
+        if self.scope_depth == 0 {
+            self.global_var_declaration();
+        } else {
+            self.local_var_declaration();
+        }
+    }
 
+    fn global_var_declaration(&mut self) {
+        self.consume(TokenType::Identifier, "Expect variable name.");
+        // TODO: see how can I remove this clone()
+        let name = self.previous.clone().data.unwrap().lexeme.to_string();
+
+        self.variable_expression();
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        );
+        self.define_variable(name);
+    }
+
+    fn local_var_declaration(&mut self) {
+        self.consume(TokenType::Identifier, "Expect variable name.");
+        // TODO: see how can I remove this clone()
+        let name = self.previous.clone().data.unwrap().lexeme.to_string();
+
+        self.variable_expression();
+        self.declare_local(name);
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        );
+    }
+
+    fn variable_expression(&mut self) {
         if self.matches(TokenType::Equal) {
             self.expression();
         } else {
             self.chunk.emit(Operation::Nil);
         }
-        self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.");
-        self.define_variable(global);
     }
 
-    fn parse_variable(&mut self, error_message: &str) -> IdentifierName {
-        self.consume(TokenType::Identifier, error_message);
-        // TODO: see how can I remove this clone()
-        self.previous.clone().data.unwrap().lexeme.to_string()
+    fn define_variable(&mut self, name: IdentifierName) {
+        self.chunk.emit(Operation::DefineGlobal(name));
     }
 
-    // fn identifier_constant(&mut self, name: &str) -> IdentifierId {
-    //     self.chunk.add_constant(Value::new_string(name))
-    // }
+    fn declare_local(&mut self, name: IdentifierName) {
+        self.validate_local(&name);
 
+        let local = Local {
+            name,
+            depth: self.scope_depth,
+        };
 
-    fn define_variable(&mut self, global: IdentifierName) {
-        self.chunk.emit(Operation::DefineGlobal(global));
+        self.locals.push(local);
     }
 
     fn variable(&mut self, can_assign: bool) {
-        // self.named_variable(self.previous);
-        // let iid = self.identifier_constant(self.previous.clone().data.unwrap().lexeme);
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
         self.named_variable(name, can_assign);
     }
 
     fn named_variable(&mut self, name: String, can_assign: bool) {
-        if can_assign && self.matches(TokenType::Equal) {
-            self.expression();
-            self.chunk.emit(Operation::SetGlobal(name));
+        // TODO: clean up this chain of ifs without creating operations are are not going to be used.
+        if let Some(i) = self.resolve_local(&name) {
+            // self.emit_variable(Operation::GetLocal(i), Operation::SetLocal(i), can_assign);
+            if can_assign && self.matches(TokenType::Equal) {
+                self.expression();
+                self.chunk.emit(Operation::SetLocal(i));
+            } else {
+                self.chunk.emit(Operation::GetLocal(i));
+            }
         } else {
-            self.chunk.emit(Operation::GetGlobal(name));
+            if can_assign && self.matches(TokenType::Equal) {
+                self.expression();
+                self.chunk.emit(Operation::SetGlobal(name));
+            } else {
+                self.chunk.emit(Operation::GetGlobal(name));
+            }
         }
     }
 
+    // fn emit_variable<F>(&mut self, get_op: fn() -> Operation, set_op: Operation, can_assign: bool) {
+    //     if can_assign && self.matches(TokenType::Equal) {
+    //         self.expression();
+    //         self.chunk.emit(set_op);
+    //     } else {
+    //         self.chunk.emit(get_op);
+    //     }
+    // }
 
     fn consume(&mut self, expected: TokenType, message: &str) {
         if self.current.token_type == expected {
@@ -268,6 +337,7 @@ impl<'a> Compiler<'a> {
 
     fn matches(&mut self, expected: TokenType) -> bool {
         if self.check(expected) {
+            // println!("Matching {:?}", self.current);
             self.advance();
             true
         } else {
@@ -276,6 +346,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn check(&self, expected: TokenType) -> bool {
+        // println!("checking {:?} with {:?}", self.current.token_type, expected);
         self.current.token_type == expected
     }
 
@@ -323,6 +394,7 @@ impl<'a> Compiler<'a> {
         let can_assign = *precedence <= Precedence::Assignment;
         self.prefix_rule(self.previous.token_type, can_assign);
 
+        // println!("checking precedence {:?} <= {:?} == {:?}", precedence, &Compiler::get_precedence(self.current.token_type), precedence <= &Compiler::get_precedence(self.current.token_type));
         while precedence <= &Compiler::get_precedence(self.current.token_type) {
             self.advance();
             self.infix_rule(self.previous.token_type);
@@ -356,7 +428,7 @@ impl<'a> Compiler<'a> {
             TokenType::GreaterEqual => self.binary(),
             TokenType::Less => self.binary(),
             TokenType::LessEqual => self.binary(),
-            _ => (),//panic!("Expect expresion"),
+            _ => (), //panic!("Expect expresion"),
         }
     }
 
@@ -376,6 +448,50 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn block(&mut self) {
+        while !self.check(TokenType::RightBrace) && !self.check(TokenType::Eof) {
+            self.declaration();
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.");
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+
+        while self.locals.len() > 0 && self.locals.last().unwrap().depth > self.scope_depth {
+            self.locals.pop();
+            self.chunk.emit(Operation::Pop);
+        }
+    }
+
+    fn validate_local(&self, name: &String) {
+        for local in self.locals.iter().rev() {
+            if local.depth != -1 && local.depth < self.scope_depth {
+                break;
+            } else if local.name == *name {
+                panic!(
+                    "There is already a local variable called '{}' in this scope.",
+                    name
+                );
+            }
+        }
+    }
+
+    fn resolve_local(&self, name: &str) -> Option<LocalVarIndex> {
+        let mut ret = None;
+        for (i, local) in self.locals.iter().rev().enumerate() {
+            if local.name == name {
+                ret = Some(i);
+                break;
+            }
+        }
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -518,16 +634,12 @@ mod tests {
         );
     }
 
-
     #[test]
     fn global_vars() {
         assert_chunk(
             "var a;",
-            vec![
-                Operation::Nil,
-                Operation::DefineGlobal("a".to_string()),
-            ],
-            vec![            ],
+            vec![Operation::Nil, Operation::DefineGlobal("a".to_string())],
+            vec![],
         );
         assert_chunk(
             "var a = 1;",
@@ -556,7 +668,7 @@ mod tests {
                 Operation::SetGlobal("a".to_string()),
                 Operation::Pop,
             ],
-            vec![Value::Number(1.0),Value::Number(2.0)],
+            vec![Value::Number(1.0), Value::Number(2.0)],
         );
         assert_chunk(
             "var a = 1; var b = a;",
@@ -569,6 +681,42 @@ mod tests {
             vec![Value::Number(1.0)],
         );
     }
+
+    #[test]
+    fn local_vars() {
+        assert_chunk(
+            "{ print 1; }",
+            vec![Operation::Constant(0), Operation::Print],
+            vec![Value::Number(1.0)],
+        );
+        assert_chunk("{ var a ; }", vec![Operation::Nil, Operation::Pop], vec![]);
+        assert_chunk(
+            "{ var a ; a = 1; }",
+            vec![
+                Operation::Nil,
+                Operation::Constant(0),
+                Operation::SetLocal(1),
+                Operation::Pop,
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0)],
+        );  
+        assert_chunk(
+            "{ var a ; a = 1; print a; }",
+            vec![
+                Operation::Nil,
+                Operation::Constant(0),
+                Operation::SetLocal(1),
+                Operation::Pop,
+                Operation::GetLocal(0),
+                Operation::Print,
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0)],
+        );
+    }
+
+    //////////////////////////
 
     fn assert_expression(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
         operations.push(Operation::Pop);
