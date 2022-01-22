@@ -217,6 +217,8 @@ impl<'a> Compiler<'a> {
             self.print_statement();
         } else if self.matches(TokenType::If) {
             self.if_statement();
+        } else if self.matches(TokenType::While) {
+            self.while_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -548,12 +550,32 @@ impl<'a> Compiler<'a> {
     fn or(&mut self) {
         let else_jump = self.emit_jump(Operation::JumpIfFalse(0));
         let end_jump = self.emit_jump(Operation::Jump(0));
-        
+
         self.patch_jump(else_jump);
         self.chunk.emit(Operation::Pop);
-        
+
         self.parse_precedence(&Precedence::Or);
         self.patch_jump(end_jump);
+    }
+
+    fn while_statement(&mut self) {
+        let loop_start = self.chunk.op_count();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after 'condition'.");
+
+        let exit_jump = self.emit_jump(Operation::JumpIfFalse(0));
+        self.chunk.emit(Operation::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.chunk.emit(Operation::Pop);
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) {
+        let offset = self.chunk.op_count() - loop_start + 1;
+        self.chunk.emit(Operation::Loop(offset));
     }
 }
 
@@ -809,14 +831,13 @@ mod tests {
             vec![
                 Operation::True,
                 Operation::JumpIfFalse(4),
-                
+                //
                 Operation::Pop,
                 Operation::Constant(0),
                 Operation::Print,
                 Operation::Jump(1),
-                
+                //
                 Operation::Pop,
-
                 Operation::Constant(1),
                 Operation::Print,
             ],
@@ -827,12 +848,12 @@ mod tests {
             vec![
                 Operation::True,
                 Operation::JumpIfFalse(4),
-                
+                //
                 Operation::Pop,
                 Operation::Constant(0),
                 Operation::Print,
                 Operation::Jump(3),
-
+                //
                 Operation::Pop,
                 Operation::Constant(1),
                 Operation::Print,
@@ -847,24 +868,77 @@ mod tests {
                 Operation::Constant(0),
                 Operation::Constant(1),
                 Operation::Equal,
-
                 Operation::JumpIfFalse(5),
-                
+                //
                 Operation::Pop,
                 Operation::Constant(2),
                 Operation::SetGlobal("a".to_string()),
                 Operation::Pop,
                 Operation::Jump(4),
-
+                //
                 Operation::Pop,
                 Operation::Constant(3),
                 Operation::SetGlobal("a".to_string()),
+                //
                 Operation::Pop,
-
                 Operation::GetGlobal("a".to_string()),
                 Operation::Print,
             ],
-            vec![Value::Number(1.0), Value::Number(2.0), Value::new_string("true"), Value::new_string("false")],
+            vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::new_string("true"),
+                Value::new_string("false"),
+            ],
+        );
+    }
+
+    #[test]
+    fn whiles() {
+        assert_chunk(
+            "while(true) { print 1; }",
+            vec![
+                Operation::True,
+                Operation::JumpIfFalse(4),
+                //
+                Operation::Pop,
+                Operation::Constant(0),
+                Operation::Print,
+                Operation::Loop(6),
+                //
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0)],
+        );
+
+        assert_chunk(
+            "var a = 0; while(a < 5) { print a; a = a + 1; }",
+            vec![
+                Operation::Constant(0),
+                Operation::DefineGlobal("a".to_string()),
+                // Condition
+                Operation::GetGlobal("a".to_string()),
+                Operation::Constant(1),
+                Operation::Less,
+                Operation::JumpIfFalse(9),
+                // Loop
+                Operation::Pop,
+                Operation::GetGlobal("a".to_string()),
+                Operation::Print,
+                Operation::GetGlobal("a".to_string()),
+                Operation::Constant(2),
+                Operation::Add,
+                Operation::SetGlobal("a".to_string()),
+                Operation::Pop,
+                Operation::Loop(13),
+                // End
+                Operation::Pop,
+            ],
+            vec![
+                Value::Number(0.0),
+                Value::Number(5.0),
+                Value::Number(1.0),
+            ],
         );
     }
 
