@@ -1,3 +1,4 @@
+use core::panic;
 use std::rc::Rc;
 
 use crate::{
@@ -214,6 +215,8 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        }else if self.matches(TokenType::If) {
+            self.if_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -492,6 +495,32 @@ impl<'a> Compiler<'a> {
         }
         ret
     }
+
+    fn if_statement(&mut self) {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
+
+        let then_jump = self.emit_jump(Operation::JumpIfFalse(0));
+        self.statement();
+        self.patch_jump(then_jump);
+    }
+
+
+    fn emit_jump(&mut self, op: Operation) -> usize {
+        self.chunk.emit(op);
+        self.chunk.op_count() - 1
+    }
+
+    fn patch_jump(&mut self, op_offset: usize) {
+        let jump = self.chunk.op_count() - 1 - op_offset;
+        let new_op =
+            match self.chunk.op_get(op_offset).expect("Tried patching an unexisting operation") {
+                Operation::JumpIfFalse(_) => Operation::JumpIfFalse(jump),
+                _ => panic!("Tried to patch_jump a non-jump operation"),
+            };
+        self.chunk.op_patch(op_offset, new_op);
+    }
 }
 
 #[cfg(test)]
@@ -695,7 +724,7 @@ mod tests {
             vec![
                 Operation::Nil,
                 Operation::Constant(0),
-                Operation::SetLocal(1),
+                Operation::SetLocal(0),
                 Operation::Pop,
                 Operation::Pop,
             ],
@@ -706,13 +735,37 @@ mod tests {
             vec![
                 Operation::Nil,
                 Operation::Constant(0),
-                Operation::SetLocal(1),
+                Operation::SetLocal(0),
                 Operation::Pop,
                 Operation::GetLocal(0),
                 Operation::Print,
                 Operation::Pop,
             ],
             vec![Value::Number(1.0)],
+        );
+        assert_chunk(
+            "{ var a = 1+2; print a; }",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Add,
+                Operation::GetLocal(0),
+                Operation::Print,
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0), Value::Number(2.0)],
+        );
+        assert_chunk(
+            "{var a = 1; {var a = a; print a;}}",
+            vec![
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Add,
+                Operation::GetLocal(0),
+                Operation::Print,
+                Operation::Pop,
+            ],
+            vec![Value::Number(1.0), Value::Number(2.0)],
         );
     }
 

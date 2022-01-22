@@ -27,8 +27,13 @@ impl VM {
     }
 
     pub fn run(&mut self, chunk: &Chunk) -> InterpretResult {
+        let code = chunk.code();
         let mut ret = InterpretResult::RuntimeError;
-        for (_ip, op) in chunk.code().iter().enumerate() {
+        let mut ip = 0;
+        loop {
+            let op = code.get(ip).expect(&format!("Operation not found. ip: {}", ip));
+            ip += 1;
+
             #[cfg(feature = "trace")]
             {
                 println!("          {:?}", self.stack);
@@ -118,7 +123,7 @@ impl VM {
                 }
                 crate::chunk::Operation::Not => {
                     let old = self.stack.pop().unwrap();
-                    let new = VM::is_falsey(old);
+                    let new = VM::is_falsey(&old);
                     self.stack.push(Value::Boolean(new));
                 }
                 crate::chunk::Operation::Negate => {
@@ -140,9 +145,19 @@ impl VM {
                     }
                     break;
                 }
+                crate::chunk::Operation::JumpIfFalse(offset) => {
+                    let exp = self.peek().expect("Missing the if expression");
+                    if VM::is_falsey(exp) {
+                        ip += offset;
+                    }
+                },
             }
         }
         ret
+    }
+
+    fn peek(&self) -> Option<&Value> {
+        self.stack.last()
     }
 
     fn binary<F>(stack: &mut Vec<Value>, implementation: F)
@@ -169,7 +184,7 @@ impl VM {
         }
     }
 
-    fn is_falsey(val: Value) -> bool {
+    fn is_falsey(val: &Value) -> bool {
         match val {
             Value::Boolean(b) => !b,
             Value::Nil => true,

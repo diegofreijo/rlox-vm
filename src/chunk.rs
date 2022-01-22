@@ -10,6 +10,7 @@ pub type LocalVarIndex = usize;
 pub enum Operation {
     Constant(IdentifierId), Nil, True, False,
     Pop,
+    
     GetGlobal(IdentifierName),
     DefineGlobal(IdentifierName),
     SetGlobal(IdentifierName),
@@ -23,6 +24,8 @@ pub enum Operation {
     Not,
 	Negate,
     Print,
+
+    JumpIfFalse(usize),
     
 	Return,
 }
@@ -95,6 +98,18 @@ impl Chunk {
     /// Get a reference to the chunk's code.
     pub fn code(&self) -> &[Operation] {
         self.code.as_ref()
+    }
+
+    pub fn op_count(&self) -> usize {
+        self.code.len()
+    }
+
+    pub fn op_get(&self, offset: usize) -> Option<&Operation> {
+        self.code.get(offset)
+    }
+
+    pub fn op_patch(&mut self, op_offset: usize, new_op: Operation) {
+        self.code[op_offset] = new_op;
     }
 }
 
