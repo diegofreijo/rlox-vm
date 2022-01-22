@@ -215,7 +215,7 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
-        }else if self.matches(TokenType::If) {
+        } else if self.matches(TokenType::If) {
             self.if_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
@@ -502,10 +502,18 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
 
         let then_jump = self.emit_jump(Operation::JumpIfFalse(0));
+        self.chunk.emit(Operation::Pop);
         self.statement();
-        self.patch_jump(then_jump);
-    }
 
+        let else_jump = self.emit_jump(Operation::Jump(0));
+        self.patch_jump(then_jump);
+        self.chunk.emit(Operation::Pop);
+
+        if self.matches(TokenType::Else) {
+            self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
 
     fn emit_jump(&mut self, op: Operation) -> usize {
         self.chunk.emit(op);
@@ -514,11 +522,15 @@ impl<'a> Compiler<'a> {
 
     fn patch_jump(&mut self, op_offset: usize) {
         let jump = self.chunk.op_count() - 1 - op_offset;
-        let new_op =
-            match self.chunk.op_get(op_offset).expect("Tried patching an unexisting operation") {
-                Operation::JumpIfFalse(_) => Operation::JumpIfFalse(jump),
-                _ => panic!("Tried to patch_jump a non-jump operation"),
-            };
+        let new_op = match self
+            .chunk
+            .op_get(op_offset)
+            .expect("Tried patching an unexisting operation")
+        {
+            Operation::JumpIfFalse(_) => Operation::JumpIfFalse(jump),
+            Operation::Jump(_) => Operation::Jump(jump),
+            _ => panic!("Tried to patch_jump a non-jump operation"),
+        };
         self.chunk.op_patch(op_offset, new_op);
     }
 }
@@ -729,7 +741,7 @@ mod tests {
                 Operation::Pop,
             ],
             vec![Value::Number(1.0)],
-        );  
+        );
         assert_chunk(
             "{ var a ; a = 1; print a; }",
             vec![
@@ -755,17 +767,64 @@ mod tests {
             ],
             vec![Value::Number(1.0), Value::Number(2.0)],
         );
+        // assert_chunk(
+        //     "{ var a = 1; { var a = a; print a; } }",
+        //     vec![
+        //         Operation::Constant(0),
+        //         Operation::GetLocal(0),
+        //         Operation::GetLocal(0),
+        //         Operation::Print,
+        //         Operation::Pop,
+        //     ],
+        //     vec![Value::Number(1.0), Value::Number(2.0)],
+        // );
+    }
+
+    #[test]
+    fn ifs() {
         assert_chunk(
-            "{var a = 1; {var a = a; print a;}}",
+            "if(true) { print 1; } else { print 2; }",
             vec![
-                Operation::Constant(0),
-                Operation::Constant(1),
-                Operation::Add,
-                Operation::GetLocal(0),
-                Operation::Print,
+                Operation::True,
+                Operation::JumpIfFalse(4),
+                
                 Operation::Pop,
+                Operation::Constant(0),
+                Operation::Print,
+                Operation::Jump(3),
+
+                Operation::Pop,
+                Operation::Constant(1),
+                Operation::Print,
             ],
             vec![Value::Number(1.0), Value::Number(2.0)],
+        );
+        assert_chunk(
+            "var a; if(1 == 2) { a = \"true\"; } else { a = \"false\"; } print a;",
+            vec![
+                Operation::Nil,
+                Operation::DefineGlobal("a".to_string()),
+                Operation::Constant(0),
+                Operation::Constant(1),
+                Operation::Equal,
+
+                Operation::JumpIfFalse(5),
+                
+                Operation::Pop,
+                Operation::Constant(2),
+                Operation::SetGlobal("a".to_string()),
+                Operation::Pop,
+                Operation::Jump(4),
+
+                Operation::Pop,
+                Operation::Constant(3),
+                Operation::SetGlobal("a".to_string()),
+                Operation::Pop,
+
+                Operation::GetGlobal("a".to_string()),
+                Operation::Print,
+            ],
+            vec![Value::Number(1.0), Value::Number(2.0), Value::new_string("true"), Value::new_string("false")],
         );
     }
 
@@ -783,8 +842,8 @@ mod tests {
         let mut compiler = Compiler::from(&source2);
         compiler.compile();
 
-        assert!(!compiler.had_error);
-        assert_eq!(compiler.chunk.code, operations);
-        assert_eq!(compiler.chunk.constants, constants);
+        assert!(!compiler.had_error, "\nsource: {}", source);
+        assert_eq!(compiler.chunk.code, operations, "\nsource: {}", source);
+        assert_eq!(compiler.chunk.constants, constants, "\nsource: {}", source);
     }
 }

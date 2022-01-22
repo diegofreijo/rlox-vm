@@ -26,6 +26,7 @@ pub enum Operation {
     Print,
 
     JumpIfFalse(usize),
+    Jump(usize),
     
 	Return,
 }

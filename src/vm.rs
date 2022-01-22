@@ -151,6 +151,7 @@ impl VM {
                         ip += offset;
                     }
                 },
+                crate::chunk::Operation::Jump(offset) => ip += offset,
             }
         }
         ret
