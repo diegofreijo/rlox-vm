@@ -783,6 +783,24 @@ mod tests {
     #[test]
     fn ifs() {
         assert_chunk(
+            "if(true) { print 1; } print 2;",
+            vec![
+                Operation::True,
+                Operation::JumpIfFalse(4),
+                
+                Operation::Pop,
+                Operation::Constant(0),
+                Operation::Print,
+                Operation::Jump(1),
+                
+                Operation::Pop,
+
+                Operation::Constant(1),
+                Operation::Print,
+            ],
+            vec![Value::Number(1.0), Value::Number(2.0)],
+        );
+        assert_chunk(
             "if(true) { print 1; } else { print 2; }",
             vec![
                 Operation::True,
