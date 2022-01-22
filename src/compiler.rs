@@ -431,6 +431,8 @@ impl<'a> Compiler<'a> {
             TokenType::GreaterEqual => self.binary(),
             TokenType::Less => self.binary(),
             TokenType::LessEqual => self.binary(),
+            TokenType::And => self.and(),
+            TokenType::Or => self.or(),
             _ => (), //panic!("Expect expresion"),
         }
     }
@@ -447,6 +449,8 @@ impl<'a> Compiler<'a> {
             TokenType::GreaterEqual => Precedence::Comparison,
             TokenType::Less => Precedence::Comparison,
             TokenType::LessEqual => Precedence::Comparison,
+            TokenType::And => Precedence::And,
+            TokenType::Or => Precedence::Or,
             _ => Precedence::None,
         }
     }
@@ -532,6 +536,24 @@ impl<'a> Compiler<'a> {
             _ => panic!("Tried to patch_jump a non-jump operation"),
         };
         self.chunk.op_patch(op_offset, new_op);
+    }
+
+    fn and(&mut self) {
+        let end_jump = self.emit_jump(Operation::JumpIfFalse(0));
+        self.chunk.emit(Operation::Pop);
+        self.parse_precedence(&Precedence::And);
+        self.patch_jump(end_jump);
+    }
+
+    fn or(&mut self) {
+        let else_jump = self.emit_jump(Operation::JumpIfFalse(0));
+        let end_jump = self.emit_jump(Operation::Jump(0));
+        
+        self.patch_jump(else_jump);
+        self.chunk.emit(Operation::Pop);
+        
+        self.parse_precedence(&Precedence::Or);
+        self.patch_jump(end_jump);
     }
 }
 
