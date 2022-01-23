@@ -219,6 +219,8 @@ impl<'a> Compiler<'a> {
             self.if_statement();
         } else if self.matches(TokenType::While) {
             self.while_statement();
+        } else if self.matches(TokenType::For) {
+            self.for_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -576,6 +578,57 @@ impl<'a> Compiler<'a> {
     fn emit_loop(&mut self, loop_start: usize) {
         let offset = self.chunk.op_count() - loop_start + 1;
         self.chunk.emit(Operation::Loop(offset));
+    }
+
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.");
+
+        // Initializer
+        if self.matches(TokenType::Semicolon) {
+            // No initializer
+        } else if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+
+        // Conditional
+        let mut loop_start = self.chunk.op_count();
+        let mut exit_jump = None;
+        if !self.matches(TokenType::Semicolon){
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.");
+
+            // Jump out of the loop if the condition is false
+            exit_jump = Some(self.emit_jump(Operation::JumpIfFalse(0)));
+            self.chunk.emit(Operation::Pop);
+        }
+
+        // Increment
+        if !self.matches(TokenType::RightParen) {
+            let body_jump = self.emit_jump(Operation::Jump(0));
+            let increment_start = self.chunk.op_count();
+            self.expression();
+
+            self.chunk.emit(Operation::Pop);
+            self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
+
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+
+        self.statement();
+        self.emit_loop(loop_start);
+
+        if let Some(offset) = exit_jump {
+            self.patch_jump(offset);
+            self.chunk.emit(Operation::Pop);
+        }
+
+        self.end_scope();
     }
 }
 
@@ -940,6 +993,41 @@ mod tests {
                 Value::Number(1.0),
             ],
         );
+    }
+
+
+    #[test]
+    fn fors() {
+        assert_chunk(
+            "for(var i = 0; i < 10; i = i + 1) { print i; }",
+            vec![
+                // Initialization
+                Operation::Constant(0),
+                // Condition
+                Operation::GetLocal(0),
+                Operation::Constant(1),
+                Operation::Less,
+                Operation::JumpIfFalse(11),
+                Operation::Pop,
+                Operation::Jump(6),
+                // Increment
+                Operation::GetLocal(0),
+                Operation::Constant(2),
+                Operation::Add,
+                Operation::SetLocal(0),
+                Operation::Pop,
+                Operation::Loop(12),
+                // Body
+                Operation::GetLocal(0),
+                Operation::Print,
+                Operation::Loop(9),
+                // Cleanup (var and condition)
+                Operation::Pop,
+                Operation::Pop,
+            ],
+            vec![Value::Number(0.0), Value::Number(10.0), Value::Number(1.0)],
+        );
+
     }
 
     //////////////////////////
