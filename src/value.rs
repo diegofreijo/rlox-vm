@@ -1,4 +1,6 @@
-use std::{rc::Rc, fmt::{Display}};
+use std::{rc::Rc, fmt::{Display}, result::Result};
+
+use crate::vm::InterpretResult;
 
 
 #[derive(Debug)]
@@ -49,6 +51,14 @@ impl Value {
 			Rc::from(ObjString::from(value))
 		)
 	}
+
+    pub fn expect_number(&self) -> Result<&f64, InterpretResult> {
+        match self {
+            Value::Number(n) => Ok(n),
+            other => Err(InterpretResult::RuntimeError(format!("Expected a number, found {:?}", other))),
+        }
+    }
+
 }
 
 impl Display for Value {
@@ -61,3 +71,13 @@ impl Display for Value {
         }
     }
 }
+
+impl Value {
+ 
+}
+
+// impl InterpreterValidator for Option<Value> {
+//     fn expect_number(&self) {
+        
+//     }
+// }

@@ -8,31 +8,30 @@ use std::{
 
 use crate::{
     chunk::{Chunk, IdentifierName},
-    value::{ObjString, Value},
+    value::{ObjString, Value}, stack::Stack,
 };
 
 #[derive(Debug, PartialEq)]
 pub enum InterpretResult {
     Ok,
-    RuntimeError,
+    RuntimeError(String),
 }
 
 pub struct VM {
-    stack: Vec<Value>,
+    stack: Stack,
     globals: HashMap<IdentifierName, Value>,
 }
 
 impl VM {
     pub fn new() -> Self {
         VM {
-            stack: vec![],
+            stack: Stack::new(),
             globals: HashMap::new(),
         }
     }
 
-    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> InterpretResult {
+    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> Result<(), InterpretResult> {
         let code = chunk.code();
-        let mut ret = InterpretResult::RuntimeError;
         let mut ip = 0;
         loop {
             let op = code
@@ -73,7 +72,7 @@ impl VM {
                 crate::chunk::Operation::SetGlobal(name) => {
                     if self.globals.contains_key(name) {
                         self.globals
-                            .insert(name.clone(), self.peek_stack().unwrap().clone());
+                            .insert(name.clone(), self.stack.peek()?.clone());
                     } else {
                         panic!("Undefined variable '{}'", name);
                     }
@@ -82,8 +81,8 @@ impl VM {
                     // let stack_index = self.stack.len() - 1 - i;
                     let val = self
                         .stack
-                        .get(*i)
-                        .expect("Local variable not found in the stack")
+                        .get(*i)?
+                        // .expect("Local variable not found in the stack")
                         .clone();
                     self.stack.push(val);
                 }
@@ -91,32 +90,30 @@ impl VM {
                     // let stack_index = self.stack.len() - 1 - i;
                     let val = self
                         .stack
-                        .last()
-                        .expect("Expression not found in the stack to assign to local")
+                        .peek()?
+                        // .expect("Expression not found in the stack to assign to local")
                         .clone();
-                    self.stack[*i] = val;
+                    self.stack.set(*i, val);
                 }
                 crate::chunk::Operation::Equal => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
                     self.stack.push(Value::Boolean(a == b));
                 }
-                crate::chunk::Operation::Greater => {
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b));
-                }
-                crate::chunk::Operation::Less => {
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b));
-                }
-                crate::chunk::Operation::Add => match self.peek_stack().unwrap() {
-                    Value::Number(_) => VM::binary(&mut self.stack, |a, b| Value::Number(a + b)),
+                crate::chunk::Operation::Greater => 
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b))?,
+                crate::chunk::Operation::Less => 
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b))?,
+                crate::chunk::Operation::Add => match self.stack.peek()? {
+                    Value::Number(_) => VM::binary(&mut self.stack, |a, b| Value::Number(a + b))?,
                     Value::String(_) => {
-                        let b = VM::pop_string(&mut self.stack);
-                        let a = VM::pop_string(&mut self.stack);
+                        let b = self.stack.pop_string()?;
+                        let a = self.stack.pop_string()?;
                         let result = format!("{}{}", a.value(), b.value());
                         let value = Value::String(Rc::from(ObjString::from_owned(result)));
                         self.stack.push(value);
                     }
-                    v => println!("Can't add the operand {:?}", v),
+                    v => Err(InterpretResult::RuntimeError(format!("Can't add the operand {:?}", v)))?,
                 },
                 crate::chunk::Operation::Substract => {
                     VM::binary(&mut self.stack, |a, b| Value::Number(a - b));
@@ -133,8 +130,9 @@ impl VM {
                     self.stack.push(Value::Boolean(new));
                 }
                 crate::chunk::Operation::Negate => {
-                    let v = VM::pop_number(&mut self.stack);
-                    self.stack.push(Value::Number(-v));
+                    let n = self.stack.pop_number()?;
+                    let res = -n;
+                    self.stack.push(Value::Number(res));
                 }
                 crate::chunk::Operation::Print => {
                     writeln!(
@@ -150,11 +148,10 @@ impl VM {
                     //     Some(val) => ret = InterpretResult::Ok(val),
                     //     None => ret = InterpretResult::Ok(Value::Nil),
                     // }
-                    ret = InterpretResult::Ok;
-                    break;
+                    return Ok(());
                 }
                 crate::chunk::Operation::JumpIfFalse(offset) => {
-                    let exp = self.peek().expect("Missing the if expression");
+                    let exp = self.stack.peek().expect("Missing the if expression");
                     if VM::is_falsey(exp) {
                         ip += offset;
                     }
@@ -163,29 +160,23 @@ impl VM {
                 crate::chunk::Operation::Loop(offset) => ip -= offset,
             }
         }
-        ret
     }
 
-    fn peek(&self) -> Option<&Value> {
-        self.stack.last()
-    }
-
-    fn binary<F>(stack: &mut Vec<Value>, implementation: F)
+    fn binary<F>(stack: &mut Stack, implementation: F) -> Result<(), InterpretResult>
     where
-        F: Fn(f64, f64) -> Value,
+        F: Fn(f64,f64) -> Value,
     {
-        let b = VM::pop_number(stack);
-        let a = VM::pop_number(stack);
+        let b = stack.pop_number()?;
+        let a = stack.pop_number()?;
         let result = implementation(a, b);
         stack.push(result);
+        Ok(())
     }
 
-    fn pop_number(stack: &mut Vec<Value>) -> f64 {
-        match stack.pop().unwrap() {
-            Value::Number(num) => num,
-            other => panic!("Expected a Number but found the value {:?}", other),
-        }
-    }
+    // fn pop_number(stack: &mut Vec<Value>) -> Result<&f64, InterpretResult> {
+    //     let v = stack.pop().unwrap();
+    //     v.expect_number().cloned()
+    // }
 
     fn pop_string(stack: &mut Vec<Value>) -> Rc<ObjString> {
         match stack.pop().unwrap() {
@@ -200,9 +191,5 @@ impl VM {
             Value::Nil => true,
             _ => false,
         }
-    }
-
-    fn peek_stack(&self) -> Option<&Value> {
-        self.stack.last()
     }
 }

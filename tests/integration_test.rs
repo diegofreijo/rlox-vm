@@ -1,6 +1,6 @@
 mod common;
 
-use rlox_vm::{compiler::Compiler, vm::{VM, InterpretResult}};
+use rlox_vm::{compiler::Compiler, vm::VM};
 
 
 #[test]
@@ -25,8 +25,7 @@ fn assert_expression(exp_source: &str, expected: &str) {
 	let mut vm = VM::new();
 	let mut stdout = common::Output::new();
 	
-	let result = vm.run(&compiler.chunk, &mut stdout);
+	vm.run(&compiler.chunk, &mut stdout).unwrap();
 
-	assert_eq!(result, InterpretResult::Ok);
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
