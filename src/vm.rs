@@ -1,5 +1,10 @@
 use core::panic;
-use std::{collections::HashMap, rc::Rc, vec};
+use std::{
+    collections::HashMap,
+    io::Write,
+    rc::Rc,
+    vec,
+};
 
 use crate::{
     chunk::{Chunk, IdentifierName},
@@ -8,8 +13,7 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub enum InterpretResult {
-    Ok(Value),
-    // CompileError,
+    Ok,
     RuntimeError,
 }
 
@@ -26,17 +30,19 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, chunk: &Chunk) -> InterpretResult {
+    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> InterpretResult {
         let code = chunk.code();
         let mut ret = InterpretResult::RuntimeError;
         let mut ip = 0;
         loop {
-            let op = code.get(ip).expect(&format!("Operation not found. ip: {}", ip));
+            let op = code
+                .get(ip)
+                .expect(&format!("Operation not found. ip: {}", ip));
             ip += 1;
 
             #[cfg(feature = "trace")]
             {
-                println!("          {:?}", self.stack);
+                writeln!(output, "          {:?}", self.stack);
                 op.disassemble(&chunk, _ip);
             }
 
@@ -131,18 +137,20 @@ impl VM {
                     self.stack.push(Value::Number(-v));
                 }
                 crate::chunk::Operation::Print => {
-                    println!(
+                    writeln!(
+                        output,
                         "{}",
                         self.stack
                             .pop()
                             .expect("Tried to print a non-existing value")
-                    );
+                    ).unwrap();
                 }
                 crate::chunk::Operation::Return => {
-                    match self.stack.pop() {
-                        Some(val) => ret = InterpretResult::Ok(val),
-                        None => ret = InterpretResult::Ok(Value::Nil),
-                    }
+                    // match self.stack.pop() {
+                    //     Some(val) => ret = InterpretResult::Ok(val),
+                    //     None => ret = InterpretResult::Ok(Value::Nil),
+                    // }
+                    ret = InterpretResult::Ok;
                     break;
                 }
                 crate::chunk::Operation::JumpIfFalse(offset) => {
@@ -150,7 +158,7 @@ impl VM {
                     if VM::is_falsey(exp) {
                         ip += offset;
                     }
-                },
+                }
                 crate::chunk::Operation::Jump(offset) => ip += offset,
                 crate::chunk::Operation::Loop(offset) => ip -= offset,
             }
