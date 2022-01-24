@@ -3,9 +3,10 @@ use std::rc::Rc;
 
 use crate::{
     chunk::{Chunk, IdentifierName, LocalVarIndex, Operation},
+    object::{ObjFunction, ObjString},
     scanner::Scanner,
     token::{TokenResult, TokenType},
-    value::{ObjString, Value},
+    value::Value,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -68,8 +69,14 @@ struct Local {
     pub depth: i8,
 }
 
+enum FunctionType {
+    Function,
+    Script,
+}
+
 pub struct Compiler<'a> {
-    pub chunk: Chunk,
+    pub function: ObjFunction,
+    function_type: FunctionType,
 
     pub had_error: bool,
     panic_mode: bool,
@@ -86,7 +93,8 @@ pub struct Compiler<'a> {
 impl<'a> Compiler<'a> {
     pub fn from(source: &'a String) -> Compiler<'a> {
         Compiler {
-            chunk: Chunk::new(),
+            function: ObjFunction::new("main"),
+            function_type: FunctionType::Script,
 
             had_error: false,
             panic_mode: false,
@@ -107,7 +115,7 @@ impl<'a> Compiler<'a> {
             self.declaration();
         }
 
-        self.chunk.emit(Operation::Return);
+        self.current_chunk().emit(Operation::Return);
 
         #[cfg(feature = "debug_print_code")]
         if !ret.had_error {
@@ -135,7 +143,7 @@ impl<'a> Compiler<'a> {
         // println!("Parsing number");
         let token_data = self.previous.data.as_ref().unwrap();
         let val = token_data.lexeme.parse::<f64>().unwrap();
-        self.chunk.emit_constant(Value::Number(val));
+        self.current_chunk().emit_constant(Value::Number(val));
     }
 
     fn grouping(&mut self) {
@@ -149,8 +157,8 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(&Precedence::Unary);
 
         match operator_type {
-            TokenType::Minus => self.chunk.emit(Operation::Negate),
-            TokenType::Bang => self.chunk.emit(Operation::Not),
+            TokenType::Minus => self.current_chunk().emit(Operation::Negate),
+            TokenType::Bang => self.current_chunk().emit(Operation::Not),
             _ => todo!(),
         }
     }
@@ -163,33 +171,33 @@ impl<'a> Compiler<'a> {
 
         match operator_type {
             TokenType::BangEqual => {
-                self.chunk.emit(Operation::Equal);
-                self.chunk.emit(Operation::Not);
+                self.current_chunk().emit(Operation::Equal);
+                self.current_chunk().emit(Operation::Not);
             }
-            TokenType::EqualEqual => self.chunk.emit(Operation::Equal),
-            TokenType::Greater => self.chunk.emit(Operation::Greater),
+            TokenType::EqualEqual => self.current_chunk().emit(Operation::Equal),
+            TokenType::Greater => self.current_chunk().emit(Operation::Greater),
             TokenType::GreaterEqual => {
-                self.chunk.emit(Operation::Less);
-                self.chunk.emit(Operation::Not);
+                self.current_chunk().emit(Operation::Less);
+                self.current_chunk().emit(Operation::Not);
             }
-            TokenType::Less => self.chunk.emit(Operation::Less),
+            TokenType::Less => self.current_chunk().emit(Operation::Less),
             TokenType::LessEqual => {
-                self.chunk.emit(Operation::Greater);
-                self.chunk.emit(Operation::Not);
+                self.current_chunk().emit(Operation::Greater);
+                self.current_chunk().emit(Operation::Not);
             }
-            TokenType::Plus => self.chunk.emit(Operation::Add),
-            TokenType::Minus => self.chunk.emit(Operation::Substract),
-            TokenType::Star => self.chunk.emit(Operation::Multiply),
-            TokenType::Slash => self.chunk.emit(Operation::Divide),
+            TokenType::Plus => self.current_chunk().emit(Operation::Add),
+            TokenType::Minus => self.current_chunk().emit(Operation::Substract),
+            TokenType::Star => self.current_chunk().emit(Operation::Multiply),
+            TokenType::Slash => self.current_chunk().emit(Operation::Divide),
             _ => todo!(),
         }
     }
 
     fn literal(&mut self) {
         match self.previous.token_type {
-            TokenType::True => self.chunk.emit(Operation::True),
-            TokenType::False => self.chunk.emit(Operation::False),
-            TokenType::Nil => self.chunk.emit(Operation::Nil),
+            TokenType::True => self.current_chunk().emit(Operation::True),
+            TokenType::False => self.current_chunk().emit(Operation::False),
+            TokenType::Nil => self.current_chunk().emit(Operation::Nil),
             tt => panic!("Expected a literal, found {:?}", tt),
         }
     }
@@ -197,7 +205,8 @@ impl<'a> Compiler<'a> {
     fn string(&mut self) {
         let s = self.previous.data.clone().unwrap().lexeme;
         let obj_str = ObjString::from(s);
-        self.chunk.emit_constant(Value::String(Rc::from(obj_str)));
+        self.current_chunk()
+            .emit_constant(Value::String(Rc::from(obj_str)));
     }
 
     fn declaration(&mut self) {
@@ -233,13 +242,13 @@ impl<'a> Compiler<'a> {
     fn expression_statement(&mut self) {
         self.expression();
         self.consume(TokenType::Semicolon, "Expect ';' after expression.");
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
     }
 
     fn print_statement(&mut self) {
         self.expression();
         self.consume(TokenType::Semicolon, "Expect ';' after value.");
-        self.chunk.emit(Operation::Print);
+        self.current_chunk().emit(Operation::Print);
     }
 
     fn var_declaration(&mut self) {
@@ -281,12 +290,12 @@ impl<'a> Compiler<'a> {
         if self.matches(TokenType::Equal) {
             self.expression();
         } else {
-            self.chunk.emit(Operation::Nil);
+            self.current_chunk().emit(Operation::Nil);
         }
     }
 
     fn define_variable(&mut self, name: IdentifierName) {
-        self.chunk.emit(Operation::DefineGlobal(name));
+        self.current_chunk().emit(Operation::DefineGlobal(name));
     }
 
     fn declare_local(&mut self, name: IdentifierName) {
@@ -311,16 +320,16 @@ impl<'a> Compiler<'a> {
             // self.emit_variable(Operation::GetLocal(i), Operation::SetLocal(i), can_assign);
             if can_assign && self.matches(TokenType::Equal) {
                 self.expression();
-                self.chunk.emit(Operation::SetLocal(i));
+                self.current_chunk().emit(Operation::SetLocal(i));
             } else {
-                self.chunk.emit(Operation::GetLocal(i));
+                self.current_chunk().emit(Operation::GetLocal(i));
             }
         } else {
             if can_assign && self.matches(TokenType::Equal) {
                 self.expression();
-                self.chunk.emit(Operation::SetGlobal(name));
+                self.current_chunk().emit(Operation::SetGlobal(name));
             } else {
-                self.chunk.emit(Operation::GetGlobal(name));
+                self.current_chunk().emit(Operation::GetGlobal(name));
             }
         }
     }
@@ -328,9 +337,9 @@ impl<'a> Compiler<'a> {
     // fn emit_variable<F>(&mut self, get_op: fn() -> Operation, set_op: Operation, can_assign: bool) {
     //     if can_assign && self.matches(TokenType::Equal) {
     //         self.expression();
-    //         self.chunk.emit(set_op);
+    //         self.current_chunk().emit(set_op);
     //     } else {
-    //         self.chunk.emit(get_op);
+    //         self.current_chunk().emit(get_op);
     //     }
     // }
 
@@ -476,7 +485,7 @@ impl<'a> Compiler<'a> {
 
         while self.locals.len() > 0 && self.locals.last().unwrap().depth > self.scope_depth {
             self.locals.pop();
-            self.chunk.emit(Operation::Pop);
+            self.current_chunk().emit(Operation::Pop);
         }
     }
 
@@ -510,12 +519,12 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
 
         let then_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
         self.statement();
 
         let else_jump = self.emit_jump(Operation::Jump(0));
         self.patch_jump(then_jump);
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
 
         if self.matches(TokenType::Else) {
             self.statement();
@@ -524,27 +533,27 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_jump(&mut self, op: Operation) -> usize {
-        self.chunk.emit(op);
-        self.chunk.op_count() - 1
+        self.current_chunk().emit(op);
+        self.current_chunk().op_count() - 1
     }
 
     fn patch_jump(&mut self, op_offset: usize) {
-        let jump = self.chunk.op_count() - 1 - op_offset;
-        let new_op = match self
-            .chunk
+        let chunk = self.current_chunk();
+        let jump = chunk.op_count() - 1 - op_offset;
+        let old_op = chunk
             .op_get(op_offset)
-            .expect("Tried patching an unexisting operation")
-        {
+            .expect("Tried patching an unexisting operation");
+        let new_op = match old_op {
             Operation::JumpIfFalse(_) => Operation::JumpIfFalse(jump),
             Operation::Jump(_) => Operation::Jump(jump),
             _ => panic!("Tried to patch_jump a non-jump operation"),
         };
-        self.chunk.op_patch(op_offset, new_op);
+        chunk.op_patch(op_offset, new_op.clone());
     }
 
     fn and(&mut self) {
         let end_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
         self.parse_precedence(&Precedence::And);
         self.patch_jump(end_jump);
     }
@@ -554,30 +563,30 @@ impl<'a> Compiler<'a> {
         let end_jump = self.emit_jump(Operation::Jump(0));
 
         self.patch_jump(else_jump);
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
 
         self.parse_precedence(&Precedence::Or);
         self.patch_jump(end_jump);
     }
 
     fn while_statement(&mut self) {
-        let loop_start = self.chunk.op_count();
+        let loop_start = self.current_chunk().op_count();
         self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
         self.expression();
         self.consume(TokenType::RightParen, "Expect ')' after 'condition'.");
 
         let exit_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
         self.statement();
         self.emit_loop(loop_start);
 
         self.patch_jump(exit_jump);
-        self.chunk.emit(Operation::Pop);
+        self.current_chunk().emit(Operation::Pop);
     }
 
     fn emit_loop(&mut self, loop_start: usize) {
-        let offset = self.chunk.op_count() - loop_start + 1;
-        self.chunk.emit(Operation::Loop(offset));
+        let offset = self.current_chunk().op_count() - loop_start + 1;
+        self.current_chunk().emit(Operation::Loop(offset));
     }
 
     fn for_statement(&mut self) {
@@ -594,24 +603,24 @@ impl<'a> Compiler<'a> {
         }
 
         // Conditional
-        let mut loop_start = self.chunk.op_count();
+        let mut loop_start = self.current_chunk().op_count();
         let mut exit_jump = None;
-        if !self.matches(TokenType::Semicolon){
+        if !self.matches(TokenType::Semicolon) {
             self.expression();
             self.consume(TokenType::Semicolon, "Expect ';' after loop condition.");
 
             // Jump out of the loop if the condition is false
             exit_jump = Some(self.emit_jump(Operation::JumpIfFalse(0)));
-            self.chunk.emit(Operation::Pop);
+            self.current_chunk().emit(Operation::Pop);
         }
 
         // Increment
         if !self.matches(TokenType::RightParen) {
             let body_jump = self.emit_jump(Operation::Jump(0));
-            let increment_start = self.chunk.op_count();
+            let increment_start = self.current_chunk().op_count();
             self.expression();
 
-            self.chunk.emit(Operation::Pop);
+            self.current_chunk().emit(Operation::Pop);
             self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
 
             self.emit_loop(loop_start);
@@ -619,16 +628,23 @@ impl<'a> Compiler<'a> {
             self.patch_jump(body_jump);
         }
 
-
         self.statement();
         self.emit_loop(loop_start);
 
         if let Some(offset) = exit_jump {
             self.patch_jump(offset);
-            self.chunk.emit(Operation::Pop);
+            self.current_chunk().emit(Operation::Pop);
         }
 
         self.end_scope();
+    }
+
+    fn current_chunk(&mut self) -> &mut Chunk {
+        &mut self.function.chunk
+    }
+
+    pub fn chunk(&self) -> &Chunk {
+        &self.function.chunk
     }
 }
 
@@ -987,14 +1003,9 @@ mod tests {
                 // End
                 Operation::Pop,
             ],
-            vec![
-                Value::Number(0.0),
-                Value::Number(5.0),
-                Value::Number(1.0),
-            ],
+            vec![Value::Number(0.0), Value::Number(5.0), Value::Number(1.0)],
         );
     }
-
 
     #[test]
     fn fors() {
@@ -1027,7 +1038,6 @@ mod tests {
             ],
             vec![Value::Number(0.0), Value::Number(10.0), Value::Number(1.0)],
         );
-
     }
 
     //////////////////////////
@@ -1045,7 +1055,7 @@ mod tests {
         compiler.compile();
 
         assert!(!compiler.had_error, "\nsource: {}", source);
-        assert_eq!(compiler.chunk.code, operations, "\nsource: {}", source);
-        assert_eq!(compiler.chunk.constants, constants, "\nsource: {}", source);
+        assert_eq!(compiler.chunk().code, operations, "\nsource: {}", source);
+        assert_eq!(compiler.chunk().constants, constants, "\nsource: {}", source);
     }
 }

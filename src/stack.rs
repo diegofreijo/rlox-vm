@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{value::{Value, ObjString}, vm::InterpretResult};
+use crate::{value::{Value},object::ObjString, vm::InterpretResult};
 
 pub struct Stack {
     values: Vec<Value>,

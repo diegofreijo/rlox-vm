@@ -6,7 +6,7 @@ pub type IdentifierName = String;
 pub type LocalVarIndex = usize;
 
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Operation {
     Constant(IdentifierId), Nil, True, False,
     Pop,
@@ -49,7 +49,7 @@ impl Operation {
     }
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 pub struct Chunk {
     pub code: Vec<Operation>,
     pub constants: Vec<Value>,
@@ -114,10 +114,3 @@ impl Chunk {
         self.code[op_offset] = new_op;
     }
 }
-
-// impl Display for Chunk {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "=====", self.code)?;
-//         write!(f, "{:#?}", self.code)
-//     }
-// }

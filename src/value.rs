@@ -1,28 +1,6 @@
 use std::{rc::Rc, fmt::{Display}};
 
-
-#[derive(Debug)]
-pub struct  ObjString {
-    value: String,
-}
-
-impl ObjString {
-    pub fn from(value: &str) -> Self {
-        ObjString {
-            value: String::from(value)
-        }
-    }
-
-	pub fn from_owned(value: String) -> Self {
-        ObjString {
-            value: value
-        }
-    }
-
-	pub fn value(&self) -> &String {
-		&self.value
-	}
-}
+use crate::object::ObjString;
 
 #[derive(Debug, Clone)]
 pub enum Value {

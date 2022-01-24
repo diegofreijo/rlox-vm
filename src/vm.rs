@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::Write, rc::Rc};
 use crate::{
     chunk::{Chunk, IdentifierName},
     stack::Stack,
-    value::{ObjString, Value},
+    value::{ Value},object::ObjString
 };
 
 pub type InterpretResult<V> = Result<V, String>;

@@ -39,7 +39,7 @@ fn repl() {
         let mut compiler = Compiler::from(&source);
         compiler.compile();
         if !compiler.had_error {
-            let result = vm.run(&compiler.chunk, &mut stdout);
+            let result = vm.run(&compiler.chunk(), &mut stdout);
             if let Err(msg) = result {
                 println!("[Runime Error] {}", msg);
             }
@@ -47,22 +47,4 @@ fn repl() {
             println!("Compiler error!");
         }
     }
-
-    // let constant = chunk.add_constant(1.2);
-    // chunk.write(chunk::Operation::Constant(constant), 123);
-
-    // let constant = chunk.add_constant(3.4);
-    // chunk.write(chunk::Operation::Constant(constant), 123);
-
-    // chunk.write(chunk::Operation::Add, 123);
-
-    // let constant = chunk.add_constant(5.6);
-    // chunk.write(chunk::Operation::Constant(constant), 123);
-
-    // chunk.write(chunk::Operation::Divide, 123);
-
-    // chunk.write(chunk::Operation::Negate, 123);
-
-    // chunk.write(chunk::Operation::Return, 124);
-    // chunk.disassemble("test chunk");
 }
