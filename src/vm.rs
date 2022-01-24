@@ -120,7 +120,7 @@ impl VM {
                     VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?,
                 crate::chunk::Operation::Not => {
                     let old = self.stack.pop().unwrap();
-                    let new = VM::is_falsey(&old);
+                    let new = old.is_falsey();
                     self.stack.push(Value::Boolean(new));
                 }
                 crate::chunk::Operation::Negate => {
@@ -146,7 +146,7 @@ impl VM {
                 }
                 crate::chunk::Operation::JumpIfFalse(offset) => {
                     let exp = self.stack.peek().expect("Missing the if expression");
-                    if VM::is_falsey(exp) {
+                    if exp.is_falsey() {
                         ip += offset;
                     }
                 }
@@ -167,11 +167,5 @@ impl VM {
         Ok(())
     }
 
-    fn is_falsey(val: &Value) -> bool {
-        match val {
-            Value::Boolean(b) => !b,
-            Value::Nil => true,
-            _ => false,
-        }
-    }
+
 }

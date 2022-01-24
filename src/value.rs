@@ -50,6 +50,14 @@ impl Value {
 		)
 	}
 
+    pub fn is_falsey(&self) -> bool {
+        match self {
+            Value::Boolean(b) => !b,
+            Value::Nil => true,
+            _ => false,
+        }
+    }
+
     // pub fn expect_number(&self) -> Result<&f64, InterpretResult> {
     //     match self {
     //         Value::Number(n) => Ok(n),
