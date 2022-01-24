@@ -3,7 +3,6 @@ use std::{
     collections::HashMap,
     io::Write,
     rc::Rc,
-    vec,
 };
 
 use crate::{
@@ -11,11 +10,7 @@ use crate::{
     value::{ObjString, Value}, stack::Stack,
 };
 
-#[derive(Debug, PartialEq)]
-pub enum InterpretResult {
-    Ok,
-    RuntimeError(String),
-}
+pub type InterpretResult<V> = Result<V, String>;
 
 pub struct VM {
     stack: Stack,
@@ -30,7 +25,7 @@ impl VM {
         }
     }
 
-    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> Result<(), InterpretResult> {
+    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> InterpretResult<()> {
         let code = chunk.code();
         let mut ip = 0;
         loop {
@@ -113,17 +108,16 @@ impl VM {
                         let value = Value::String(Rc::from(ObjString::from_owned(result)));
                         self.stack.push(value);
                     }
-                    v => Err(InterpretResult::RuntimeError(format!("Can't add the operand {:?}", v)))?,
+                    v => Err(format!("Can't add the operand {:?}", v))?,
                 },
-                crate::chunk::Operation::Substract => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b));
-                }
-                crate::chunk::Operation::Multiply => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b));
-                }
-                crate::chunk::Operation::Divide => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b));
-                }
+                crate::chunk::Operation::Substract => 
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?,
+
+                crate::chunk::Operation::Multiply => 
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?,
+                
+                crate::chunk::Operation::Divide => 
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?,
                 crate::chunk::Operation::Not => {
                     let old = self.stack.pop().unwrap();
                     let new = VM::is_falsey(&old);
@@ -162,7 +156,7 @@ impl VM {
         }
     }
 
-    fn binary<F>(stack: &mut Stack, implementation: F) -> Result<(), InterpretResult>
+    fn binary<F>(stack: &mut Stack, implementation: F) -> InterpretResult<()>
     where
         F: Fn(f64,f64) -> Value,
     {
@@ -171,18 +165,6 @@ impl VM {
         let result = implementation(a, b);
         stack.push(result);
         Ok(())
-    }
-
-    // fn pop_number(stack: &mut Vec<Value>) -> Result<&f64, InterpretResult> {
-    //     let v = stack.pop().unwrap();
-    //     v.expect_number().cloned()
-    // }
-
-    fn pop_string(stack: &mut Vec<Value>) -> Rc<ObjString> {
-        match stack.pop().unwrap() {
-            Value::String(rc) => rc,
-            other => panic!("Expected a String but found the value {:?}", other),
-        }
     }
 
     fn is_falsey(val: &Value) -> bool {

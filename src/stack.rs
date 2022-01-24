@@ -15,43 +15,43 @@ impl Stack {
         self.values.push(value)
     }
 
-    pub fn pop(&mut self) -> Result<Value, InterpretResult> {
-        self.values.pop().ok_or(InterpretResult::RuntimeError(
+    pub fn pop(&mut self) -> InterpretResult<Value> {
+        self.values.pop().ok_or(
             "Tried to pop an empty stack.".to_string(),
-        ))
+        )
     }
 
-    pub fn pop_number(&mut self) -> Result<f64, InterpretResult> {
+    pub fn pop_number(&mut self) -> InterpretResult<f64> {
         match self.pop()? {
             Value::Number(n) => Ok(n),
-            v => Err(InterpretResult::RuntimeError(
+            v => Err(
                 format!("Expected to pop a number but found '{}'.", v).to_string(),
-            )),
+            ),
         }
     }
 
-	pub fn pop_string(&mut self) -> Result<Rc<ObjString>, InterpretResult> {
+	pub fn pop_string(&mut self) -> InterpretResult<Rc<ObjString>> {
         match self.pop()? {
             Value::String(s) => Ok(s),
-            v => Err(InterpretResult::RuntimeError(
+            v => Err(
                 format!("Expected to pop a string but found '{}'.", v).to_string(),
-            )),
+            ),
         }
     }
 
-    pub fn get(&self, index: usize) -> Result<&Value, InterpretResult> {
-        self.values.get(index).ok_or(InterpretResult::RuntimeError(
+    pub fn get(&self, index: usize) -> InterpretResult<&Value> {
+        self.values.get(index).ok_or(
             format!("No value found at index {}.", index).to_string(),
-        ))
+        )
     }
 
     pub fn set(&mut self, index: usize, value: Value) {
         self.values[index] = value;
     }
 
-    pub fn peek(&self) -> Result<&Value, InterpretResult> {
-        self.values.last().ok_or(InterpretResult::RuntimeError(
+    pub fn peek(&self) -> InterpretResult<&Value> {
+        self.values.last().ok_or(
             "Tried to peek an empty stack".to_string(),
-        ))
+        )
     }
 }

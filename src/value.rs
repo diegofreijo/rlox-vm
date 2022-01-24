@@ -1,6 +1,4 @@
-use std::{rc::Rc, fmt::{Display}, result::Result};
-
-use crate::vm::InterpretResult;
+use std::{rc::Rc, fmt::{Display}};
 
 
 #[derive(Debug)]
@@ -52,12 +50,12 @@ impl Value {
 		)
 	}
 
-    pub fn expect_number(&self) -> Result<&f64, InterpretResult> {
-        match self {
-            Value::Number(n) => Ok(n),
-            other => Err(InterpretResult::RuntimeError(format!("Expected a number, found {:?}", other))),
-        }
-    }
+    // pub fn expect_number(&self) -> Result<&f64, InterpretResult> {
+    //     match self {
+    //         Value::Number(n) => Ok(n),
+    //         other => Err(InterpretResult::RuntimeError(format!("Expected a number, found {:?}", other))),
+    //     }
+    // }
 
 }
 
