@@ -1,5 +1,5 @@
 mod common;
-use common::{assert_expression, assert_script_output};
+use common::{assert_expression, assert_script_output, assert_script_error};
 
 #[test]
 fn expresions() {
@@ -31,5 +31,15 @@ fn loops() {
     assert_script_output(
         "for(var i = 0; i < 4; i = i + 1) { print i; }",
         "0\n1\n2\n3",
+    );
+}
+
+
+
+#[test]
+fn runtime_errors() {
+    assert_script_error(
+        "print a;",
+        "Undefined variable 'a'",
     );
 }

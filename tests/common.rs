@@ -56,3 +56,19 @@ pub fn assert_script_output(script_source: &str, expected: &str) {
 
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
+
+pub fn assert_script_error(script_source: &str, expected_error_message: &str) {
+	let source= format!("{}", script_source);
+    let mut compiler = Compiler::from(&source);
+	compiler.compile();
+
+	assert!(!compiler.had_error);
+
+	let mut vm = VM::new();
+	let mut stdout = Output::new();
+	
+	let result = vm.run(&compiler.chunk, &mut stdout);
+    let msg = result.expect_err("This script should have failed");
+
+	assert_eq!(msg.trim_end_matches("\n"), expected_error_message);
+}

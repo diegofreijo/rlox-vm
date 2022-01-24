@@ -1,9 +1,8 @@
 extern crate rlox_vm;
 
-use std::io::{self, Write};
-use rlox_vm::vm::{VM};
 use rlox_vm::compiler::Compiler;
-
+use rlox_vm::vm::VM;
+use std::io::{self, Write};
 
 fn main() {
     repl()
@@ -40,8 +39,10 @@ fn repl() {
         let mut compiler = Compiler::from(&source);
         compiler.compile();
         if !compiler.had_error {
-            let _result = vm.run(&compiler.chunk, &mut stdout);
-            // println!("{:?}", result);
+            let result = vm.run(&compiler.chunk, &mut stdout);
+            if let Err(msg) = result {
+                println!("[Runime Error] {}", msg);
+            }
         } else {
             println!("Compiler error!");
         }

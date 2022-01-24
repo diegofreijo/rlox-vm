@@ -1,13 +1,9 @@
-use core::panic;
-use std::{
-    collections::HashMap,
-    io::Write,
-    rc::Rc,
-};
+use std::{collections::HashMap, io::Write, rc::Rc};
 
 use crate::{
     chunk::{Chunk, IdentifierName},
-    value::{ObjString, Value}, stack::Stack,
+    stack::Stack,
+    value::{ObjString, Value},
 };
 
 pub type InterpretResult<V> = Result<V, String>;
@@ -31,7 +27,7 @@ impl VM {
         loop {
             let op = code
                 .get(ip)
-                .expect(&format!("Operation not found. ip: {}", ip));
+                .ok_or(&format!("Operation not found. ip: {}", ip))?;
             ip += 1;
 
             #[cfg(feature = "trace")]
@@ -49,13 +45,13 @@ impl VM {
                 crate::chunk::Operation::True => self.stack.push(Value::Boolean(true)),
                 crate::chunk::Operation::False => self.stack.push(Value::Boolean(false)),
                 crate::chunk::Operation::Pop => {
-                    self.stack.pop().expect("There was nothing to pop");
+                    self.stack.pop()?;//.expect("There was nothing to pop");
                 }
                 crate::chunk::Operation::GetGlobal(name) => {
                     let val = self
                         .globals
                         .get(name)
-                        .expect(&format!("Undefined variable '{}'", name));
+                        .ok_or(&format!("Undefined variable '{}'", name))?;
                     self.stack.push(val.clone());
                 }
                 crate::chunk::Operation::DefineGlobal(name) => {
@@ -65,12 +61,12 @@ impl VM {
                     //     .insert(String::from(name.value()), self.stack.pop().unwrap());
                 }
                 crate::chunk::Operation::SetGlobal(name) => {
-                    if self.globals.contains_key(name) {
-                        self.globals
-                            .insert(name.clone(), self.stack.peek()?.clone());
-                    } else {
-                        panic!("Undefined variable '{}'", name);
+                    if !self.globals.contains_key(name) {
+                        return Err(format!("Undefined variable '{}'", name));
                     }
+
+                    self.globals
+                        .insert(name.clone(), self.stack.peek()?.clone());
                 }
                 crate::chunk::Operation::GetLocal(i) => {
                     // let stack_index = self.stack.len() - 1 - i;
@@ -95,10 +91,12 @@ impl VM {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(Value::Boolean(a == b));
                 }
-                crate::chunk::Operation::Greater => 
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b))?,
-                crate::chunk::Operation::Less => 
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b))?,
+                crate::chunk::Operation::Greater => {
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b))?
+                }
+                crate::chunk::Operation::Less => {
+                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b))?
+                }
                 crate::chunk::Operation::Add => match self.stack.peek()? {
                     Value::Number(_) => VM::binary(&mut self.stack, |a, b| Value::Number(a + b))?,
                     Value::String(_) => {
@@ -110,14 +108,17 @@ impl VM {
                     }
                     v => Err(format!("Can't add the operand {:?}", v))?,
                 },
-                crate::chunk::Operation::Substract => 
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?,
+                crate::chunk::Operation::Substract => {
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?
+                }
 
-                crate::chunk::Operation::Multiply => 
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?,
-                
-                crate::chunk::Operation::Divide => 
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?,
+                crate::chunk::Operation::Multiply => {
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?
+                }
+
+                crate::chunk::Operation::Divide => {
+                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?
+                }
                 crate::chunk::Operation::Not => {
                     let old = self.stack.pop().unwrap();
                     let new = old.is_falsey();
@@ -132,10 +133,8 @@ impl VM {
                     writeln!(
                         output,
                         "{}",
-                        self.stack
-                            .pop()
-                            .expect("Tried to print a non-existing value")
-                    ).unwrap();
+                        self.stack.pop()? // .expect("Tried to print a non-existing value")
+                    ).map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
                 }
                 crate::chunk::Operation::Return => {
                     // match self.stack.pop() {
@@ -145,7 +144,7 @@ impl VM {
                     return Ok(());
                 }
                 crate::chunk::Operation::JumpIfFalse(offset) => {
-                    let exp = self.stack.peek().expect("Missing the if expression");
+                    let exp = self.stack.peek()?;//.expect("Missing the if expression");
                     if exp.is_falsey() {
                         ip += offset;
                     }
@@ -158,7 +157,7 @@ impl VM {
 
     fn binary<F>(stack: &mut Stack, implementation: F) -> InterpretResult<()>
     where
-        F: Fn(f64,f64) -> Value,
+        F: Fn(f64, f64) -> Value,
     {
         let b = stack.pop_number()?;
         let a = stack.pop_number()?;
@@ -166,6 +165,4 @@ impl VM {
         stack.push(result);
         Ok(())
     }
-
-
 }
