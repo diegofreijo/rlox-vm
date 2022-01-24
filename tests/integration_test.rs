@@ -1,31 +1,35 @@
 mod common;
-
-use rlox_vm::{compiler::Compiler, vm::VM};
-
+use common::{assert_expression, assert_script_output};
 
 #[test]
 fn expresions() {
-	assert_expression("1", "1");
-	assert_expression("1+2", "3");
-	assert_expression("!nil", "true");
-	assert_expression("!(5 - 4 > 3 * 2 == !nil)", "true");
-	assert_expression("\"asd\" +\"qwe \"", "asdqwe ");
-	assert_expression("\"asd\" == \"asd\"", "true");
-	assert_expression("\"asd\" != \"asd\"", "false");
+    assert_expression("1", "1");
+    assert_expression("1+2", "3");
+    assert_expression("!nil", "true");
+    assert_expression("!(5 - 4 > 3 * 2 == !nil)", "true");
+    assert_expression("\"asd\" +\"qwe \"", "asdqwe ");
+    assert_expression("\"asd\" == \"asd\"", "true");
+    assert_expression("\"asd\" != \"asd\"", "false");
 }
 
+#[test]
+fn ifs() {
+    assert_script_output("var a = 1; print a;", "1");
+    assert_script_output("if(true) { print \"true\"; } print 2;", "true\n2");
+    assert_script_output(
+        "var a; if(1 == 2) { a = \"true\"; } else { a = \"false\"; } print a;",
+        "false",
+    );
+}
 
-fn assert_expression(exp_source: &str, expected: &str) {
-	let source= format!("print {};", exp_source);
-    let mut compiler = Compiler::from(&source);
-	compiler.compile();
-
-	assert!(!compiler.had_error);
-
-	let mut vm = VM::new();
-	let mut stdout = common::Output::new();
-	
-	vm.run(&compiler.chunk, &mut stdout).unwrap();
-
-	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
+#[test]
+fn loops() {
+    assert_script_output(
+        "var a = 0; while(a < 5) { print a; a = a + 1; }",
+        "0\n1\n2\n3\n4",
+    );
+    assert_script_output(
+        "for(var i = 0; i < 4; i = i + 1) { print i; }",
+        "0\n1\n2\n3",
+    );
 }
