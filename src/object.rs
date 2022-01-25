@@ -4,7 +4,7 @@ use crate::chunk::Chunk;
 pub struct ObjFunction {
     arity: u8,
     pub chunk: Chunk,
-    name: String,
+    pub name: String,
 }
 
 impl ObjFunction {

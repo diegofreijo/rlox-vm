@@ -1,9 +1,10 @@
 use std::{collections::HashMap, io::Write, rc::Rc};
 
 use crate::{
-    chunk::{Chunk, IdentifierName},
+    chunk::IdentifierName,
+    object::{ObjFunction, ObjString},
     stack::Stack,
-    value::{ Value},object::{ObjString, ObjFunction}
+    value::Value,
 };
 
 pub type InterpretResult<V> = Result<V, String>;
@@ -30,7 +31,7 @@ pub struct VM {
     frames: Vec<CallFrame>,
 }
 
-impl  VM {
+impl VM {
     pub fn new() -> Self {
         VM {
             stack: Stack::new(),
@@ -41,10 +42,10 @@ impl  VM {
 
     pub fn run<W: Write>(&mut self, function: ObjFunction, output: &mut W) -> InterpretResult<()> {
         self.frames = vec![CallFrame::new(function)];
-        let mut frame = self.frames.first_mut().ok_or("")?;
+        let mut frame = self.frames.first_mut().ok_or("This can't happen ever")?;
         let code = frame.function.chunk.code();
         let chunk = &frame.function.chunk;
-        
+
         loop {
             let op = code
                 .get(frame.ip)
@@ -66,7 +67,7 @@ impl  VM {
                 crate::chunk::Operation::True => self.stack.push(Value::Boolean(true)),
                 crate::chunk::Operation::False => self.stack.push(Value::Boolean(false)),
                 crate::chunk::Operation::Pop => {
-                    self.stack.pop()?;//.expect("There was nothing to pop");
+                    self.stack.pop()?; //.expect("There was nothing to pop");
                 }
                 crate::chunk::Operation::GetGlobal(name) => {
                     let val = self
@@ -87,7 +88,7 @@ impl  VM {
                         .insert(name.clone(), self.stack.peek()?.clone());
                 }
                 crate::chunk::Operation::GetLocal(i) => {
-                    let absolute_index = i  + frame.first_slot;
+                    let absolute_index = i + frame.first_slot;
                     let val = self
                         .stack
                         .get(absolute_index)?
@@ -96,7 +97,7 @@ impl  VM {
                     self.stack.push(val);
                 }
                 crate::chunk::Operation::SetLocal(i) => {
-                    let absolute_index =  frame.first_slot + i;
+                    let absolute_index = frame.first_slot + i;
                     let val = self
                         .stack
                         .peek()?
@@ -152,7 +153,8 @@ impl  VM {
                         output,
                         "{}",
                         self.stack.pop()? // .expect("Tried to print a non-existing value")
-                    ).map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
+                    )
+                    .map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
                 }
                 crate::chunk::Operation::Return => {
                     // match self.stack.pop() {
@@ -162,7 +164,7 @@ impl  VM {
                     return Ok(());
                 }
                 crate::chunk::Operation::JumpIfFalse(offset) => {
-                    let exp = self.stack.peek()?;//.expect("Missing the if expression");
+                    let exp = self.stack.peek()?; //.expect("Missing the if expression");
                     if exp.is_falsey() {
                         frame.ip += offset;
                     }

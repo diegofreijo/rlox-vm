@@ -36,10 +36,10 @@ fn repl() {
             }
         }
 
-        let mut compiler = Compiler::from(&source);
-        compiler.compile();
+        let mut compiler = Compiler::from_source(&source);
+        let frame = compiler.compile();
         if !compiler.had_error {
-            let result = vm.run(compiler.function, &mut stdout);
+            let result = vm.run(frame, &mut stdout);
             if let Err(msg) = result {
                 println!("[Runime Error] {}", msg);
             }

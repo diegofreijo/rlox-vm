@@ -29,45 +29,45 @@ impl Write for Output {
 
 pub fn assert_expression(exp_source: &str, expected: &str) {
 	let source= format!("print {};", exp_source);
-    let mut compiler = Compiler::from(&source);
-	compiler.compile();
+    let mut compiler = Compiler::from_source(&source);
+	let frame = compiler.compile();
 
 	assert!(!compiler.had_error);
 
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	vm.run(compiler.function, &mut stdout).unwrap();
+	vm.run(frame, &mut stdout).unwrap();
 
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
 
 pub fn assert_script_output(script_source: &str, expected: &str) {
 	let source= format!("{}", script_source);
-    let mut compiler = Compiler::from(&source);
-	compiler.compile();
+    let mut compiler = Compiler::from_source(&source);
+	let frame = compiler.compile();
 
 	assert!(!compiler.had_error);
 
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	vm.run(compiler.function, &mut stdout).unwrap();
+	vm.run(frame, &mut stdout).unwrap();
 
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
 
 pub fn assert_script_error(script_source: &str, expected_error_message: &str) {
 	let source= format!("{}", script_source);
-    let mut compiler = Compiler::from(&source);
-	compiler.compile();
+    let mut compiler = Compiler::from_source(&source);
+	let frame = compiler.compile();
 
 	assert!(!compiler.had_error);
 
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	let result = vm.run(compiler.function, &mut stdout);
+	let result = vm.run(frame, &mut stdout);
     let msg = result.expect_err("This script should have failed");
 
 	assert_eq!(msg.trim_end_matches("\n"), expected_error_message);

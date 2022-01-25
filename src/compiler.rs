@@ -75,9 +75,8 @@ enum FunctionType {
 }
 
 pub struct Compiler<'a> {
-    pub function: ObjFunction,
-    function_type: FunctionType,
-
+    frames: Vec<ObjFunction>,
+    // function_type: FunctionType,
     pub had_error: bool,
     panic_mode: bool,
 
@@ -91,15 +90,14 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn from(source: &'a String) -> Compiler<'a> {
+    pub fn from_source(source: &'a String) -> Compiler<'a> {
         Compiler {
-            function: ObjFunction::new("main"),
-            function_type: FunctionType::Script,
-
+            frames: vec![],
+            // function_type: FunctionType::Script,
             had_error: false,
             panic_mode: false,
 
-            scanner: Scanner::new(&source),
+            scanner: Scanner::new(source),
             previous: TokenResult::invalid(),
             current: TokenResult::invalid(),
 
@@ -108,22 +106,24 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(&mut self) {
-        self.advance();
+    pub fn compile(&mut self) -> ObjFunction {
+        let mut frame = ObjFunction::new("main");
+        self.advance(&mut frame);
 
-        while !self.matches(TokenType::Eof) {
-            self.declaration();
+        while !self.matches(TokenType::Eof, &mut frame) {
+            self.declaration(&mut frame);
         }
 
-        self.current_chunk().emit(Operation::Return);
+        frame.chunk.emit(Operation::Return);
 
         #[cfg(feature = "debug_print_code")]
         if !ret.had_error {
             ret.chunk.disassemble("code");
         }
+        frame
     }
 
-    fn advance(&mut self) {
+    fn advance(&mut self, frame: &mut ObjFunction) {
         self.previous = self.current.clone();
         loop {
             self.current = self.scanner.scan_token();
@@ -135,167 +135,173 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn expression(&mut self) {
-        self.parse_precedence(&Precedence::Assignment);
+    fn expression(&mut self, frame: &mut ObjFunction) {
+        self.parse_precedence(&Precedence::Assignment, frame);
     }
 
-    fn number(&mut self) {
+    fn number(&mut self, frame: &mut ObjFunction) {
         // println!("Parsing number");
         let token_data = self.previous.data.as_ref().unwrap();
         let val = token_data.lexeme.parse::<f64>().unwrap();
-        self.current_chunk().emit_constant(Value::Number(val));
+        frame.chunk.emit_constant(Value::Number(val));
     }
 
-    fn grouping(&mut self) {
-        self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after expression");
+    fn grouping(&mut self, frame: &mut ObjFunction) {
+        self.expression(frame);
+        self.consume(TokenType::RightParen, "Expect ')' after expression", frame);
     }
 
-    fn unary(&mut self) {
+    fn unary(&mut self, frame: &mut ObjFunction) {
         let operator_type = self.previous.token_type;
 
-        self.parse_precedence(&Precedence::Unary);
+        self.parse_precedence(&Precedence::Unary, frame);
 
         match operator_type {
-            TokenType::Minus => self.current_chunk().emit(Operation::Negate),
-            TokenType::Bang => self.current_chunk().emit(Operation::Not),
+            TokenType::Minus => frame.chunk.emit(Operation::Negate),
+            TokenType::Bang => frame.chunk.emit(Operation::Not),
             _ => todo!(),
         }
     }
 
-    fn binary(&mut self) {
+    fn binary(&mut self, frame: &mut ObjFunction) {
         let operator_type = self.previous.token_type;
 
         let next_precedence = Compiler::get_precedence(operator_type).next();
-        self.parse_precedence(&next_precedence);
+        self.parse_precedence(&next_precedence, frame);
 
         match operator_type {
             TokenType::BangEqual => {
-                self.current_chunk().emit(Operation::Equal);
-                self.current_chunk().emit(Operation::Not);
+                frame.chunk.emit(Operation::Equal);
+                frame.chunk.emit(Operation::Not);
             }
-            TokenType::EqualEqual => self.current_chunk().emit(Operation::Equal),
-            TokenType::Greater => self.current_chunk().emit(Operation::Greater),
+            TokenType::EqualEqual => frame.chunk.emit(Operation::Equal),
+            TokenType::Greater => frame.chunk.emit(Operation::Greater),
             TokenType::GreaterEqual => {
-                self.current_chunk().emit(Operation::Less);
-                self.current_chunk().emit(Operation::Not);
+                frame.chunk.emit(Operation::Less);
+                frame.chunk.emit(Operation::Not);
             }
-            TokenType::Less => self.current_chunk().emit(Operation::Less),
+            TokenType::Less => frame.chunk.emit(Operation::Less),
             TokenType::LessEqual => {
-                self.current_chunk().emit(Operation::Greater);
-                self.current_chunk().emit(Operation::Not);
+                frame.chunk.emit(Operation::Greater);
+                frame.chunk.emit(Operation::Not);
             }
-            TokenType::Plus => self.current_chunk().emit(Operation::Add),
-            TokenType::Minus => self.current_chunk().emit(Operation::Substract),
-            TokenType::Star => self.current_chunk().emit(Operation::Multiply),
-            TokenType::Slash => self.current_chunk().emit(Operation::Divide),
+            TokenType::Plus => frame.chunk.emit(Operation::Add),
+            TokenType::Minus => frame.chunk.emit(Operation::Substract),
+            TokenType::Star => frame.chunk.emit(Operation::Multiply),
+            TokenType::Slash => frame.chunk.emit(Operation::Divide),
             _ => todo!(),
         }
     }
 
-    fn literal(&mut self) {
+    fn literal(&mut self, frame: &mut ObjFunction) {
         match self.previous.token_type {
-            TokenType::True => self.current_chunk().emit(Operation::True),
-            TokenType::False => self.current_chunk().emit(Operation::False),
-            TokenType::Nil => self.current_chunk().emit(Operation::Nil),
+            TokenType::True => frame.chunk.emit(Operation::True),
+            TokenType::False => frame.chunk.emit(Operation::False),
+            TokenType::Nil => frame.chunk.emit(Operation::Nil),
             tt => panic!("Expected a literal, found {:?}", tt),
         }
     }
 
-    fn string(&mut self) {
+    fn string(&mut self, frame: &mut ObjFunction) {
         let s = self.previous.data.clone().unwrap().lexeme;
         let obj_str = ObjString::from(s);
-        self.current_chunk()
-            .emit_constant(Value::String(Rc::from(obj_str)));
+        frame.chunk.emit_constant(Value::String(Rc::from(obj_str)));
     }
 
-    fn declaration(&mut self) {
-        if self.matches(TokenType::Var) {
-            self.var_declaration();
+    fn declaration(&mut self, frame: &mut ObjFunction) {
+        if self.matches(TokenType::Fun, frame) {
+            self.fun_declaration(frame);
+        } else if self.matches(TokenType::Var, frame) {
+            self.var_declaration(frame);
         } else {
-            self.statement();
+            self.statement(frame);
         }
 
         if self.panic_mode {
-            self.synchronize();
+            self.synchronize(frame);
         }
     }
 
-    fn statement(&mut self) {
-        if self.matches(TokenType::Print) {
-            self.print_statement();
-        } else if self.matches(TokenType::If) {
-            self.if_statement();
-        } else if self.matches(TokenType::While) {
-            self.while_statement();
-        } else if self.matches(TokenType::For) {
-            self.for_statement();
-        } else if self.matches(TokenType::LeftBrace) {
-            self.begin_scope();
-            self.block();
-            self.end_scope();
+    fn statement(&mut self, frame: &mut ObjFunction) {
+        if self.matches(TokenType::Print, frame) {
+            self.print_statement(frame);
+        } else if self.matches(TokenType::If, frame) {
+            self.if_statement(frame);
+        } else if self.matches(TokenType::While, frame) {
+            self.while_statement(frame);
+        } else if self.matches(TokenType::For, frame) {
+            self.for_statement(frame);
+        } else if self.matches(TokenType::LeftBrace, frame) {
+            self.begin_scope(frame);
+            self.block(frame);
+            self.end_scope(frame);
         } else {
-            self.expression_statement();
+            self.expression_statement(frame);
         }
     }
 
-    fn expression_statement(&mut self) {
-        self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
-        self.current_chunk().emit(Operation::Pop);
+    fn expression_statement(&mut self, frame: &mut ObjFunction) {
+        self.expression(frame);
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.", frame);
+        frame.chunk.emit(Operation::Pop);
     }
 
-    fn print_statement(&mut self) {
-        self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after value.");
-        self.current_chunk().emit(Operation::Print);
+    fn print_statement(&mut self, frame: &mut ObjFunction) {
+        self.expression(frame);
+        self.consume(TokenType::Semicolon, "Expect ';' after value.", frame);
+        frame.chunk.emit(Operation::Print);
     }
 
-    fn var_declaration(&mut self) {
+    fn var_declaration(&mut self, frame: &mut ObjFunction) {
         if self.scope_depth == 0 {
-            self.global_var_declaration();
+            self.global_var_declaration(frame);
         } else {
-            self.local_var_declaration();
+            self.local_var_declaration(frame);
         }
     }
 
-    fn global_var_declaration(&mut self) {
-        self.consume(TokenType::Identifier, "Expect variable name.");
+    fn global_var_declaration(&mut self, frame: &mut ObjFunction) {
+        self.parse_variable("Expect variable name.", frame);
         // TODO: see how can I remove this clone()
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
 
-        self.variable_expression();
+        self.variable_expression(frame);
 
         self.consume(
             TokenType::Semicolon,
-            "Expect ';' after variable declaration.",
+            "Expect ';' after variable declaration.", frame
         );
-        self.define_variable(name);
+        self.define_variable(name, frame);
     }
 
-    fn local_var_declaration(&mut self) {
-        self.consume(TokenType::Identifier, "Expect variable name.");
+    fn parse_variable(&mut self, error_message: &str, frame: &mut ObjFunction) -> IdentifierName {
+        self.consume(TokenType::Identifier, error_message, frame);
+        self.previous.data.as_ref().unwrap().lexeme.to_string()
+    }
+
+    fn local_var_declaration(&mut self, frame: &mut ObjFunction) {
+        self.consume(TokenType::Identifier, "Expect variable name.", frame);
         // TODO: see how can I remove this clone()
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
 
-        self.variable_expression();
+        self.variable_expression(frame);
         self.declare_local(name);
         self.consume(
             TokenType::Semicolon,
-            "Expect ';' after variable declaration.",
+            "Expect ';' after variable declaration.",frame
         );
     }
 
-    fn variable_expression(&mut self) {
-        if self.matches(TokenType::Equal) {
-            self.expression();
+    fn variable_expression(&mut self, frame: &mut ObjFunction) {
+        if self.matches(TokenType::Equal, frame) {
+            self.expression(frame);
         } else {
-            self.current_chunk().emit(Operation::Nil);
+            frame.chunk.emit(Operation::Nil);
         }
     }
 
-    fn define_variable(&mut self, name: IdentifierName) {
-        self.current_chunk().emit(Operation::DefineGlobal(name));
+    fn define_variable(&mut self, name: IdentifierName, frame: &mut ObjFunction) {
+        frame.chunk.emit(Operation::DefineGlobal(name));
     }
 
     fn declare_local(&mut self, name: IdentifierName) {
@@ -309,27 +315,27 @@ impl<'a> Compiler<'a> {
         self.locals.push(local);
     }
 
-    fn variable(&mut self, can_assign: bool) {
+    fn variable(&mut self, can_assign: bool, frame: &mut ObjFunction) {
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
-        self.named_variable(name, can_assign);
+        self.named_variable(name, can_assign, frame);
     }
 
-    fn named_variable(&mut self, name: String, can_assign: bool) {
+    fn named_variable(&mut self, name: String, can_assign: bool, frame: &mut ObjFunction) {
         // TODO: clean up this chain of ifs without creating operations are are not going to be used.
-        if let Some(i) = self.resolve_local(&name) {
+        if let Some(i) = self.resolve_local(&name, frame) {
             // self.emit_variable(Operation::GetLocal(i), Operation::SetLocal(i), can_assign);
-            if can_assign && self.matches(TokenType::Equal) {
-                self.expression();
-                self.current_chunk().emit(Operation::SetLocal(i));
+            if can_assign && self.matches(TokenType::Equal, frame) {
+                self.expression(frame);
+                frame.chunk.emit(Operation::SetLocal(i));
             } else {
-                self.current_chunk().emit(Operation::GetLocal(i));
+                frame.chunk.emit(Operation::GetLocal(i));
             }
         } else {
-            if can_assign && self.matches(TokenType::Equal) {
-                self.expression();
-                self.current_chunk().emit(Operation::SetGlobal(name));
+            if can_assign && self.matches(TokenType::Equal, frame) {
+                self.expression(frame);
+                frame.chunk.emit(Operation::SetGlobal(name));
             } else {
-                self.current_chunk().emit(Operation::GetGlobal(name));
+                frame.chunk.emit(Operation::GetGlobal(name));
             }
         }
     }
@@ -337,24 +343,24 @@ impl<'a> Compiler<'a> {
     // fn emit_variable<F>(&mut self, get_op: fn() -> Operation, set_op: Operation, can_assign: bool) {
     //     if can_assign && self.matches(TokenType::Equal) {
     //         self.expression();
-    //         self.current_chunk().emit(set_op);
+    //         frame.chunk.emit(set_op);
     //     } else {
-    //         self.current_chunk().emit(get_op);
+    //         frame.chunk.emit(get_op);
     //     }
     // }
 
-    fn consume(&mut self, expected: TokenType, message: &str) {
+    fn consume(&mut self, expected: TokenType, message: &str, frame: &mut ObjFunction) {
         if self.current.token_type == expected {
-            self.advance();
+            self.advance(frame);
         } else {
             self.error_at_current(message);
         }
     }
 
-    fn matches(&mut self, expected: TokenType) -> bool {
+    fn matches(&mut self, expected: TokenType, frame: &mut ObjFunction) -> bool {
         if self.check(expected) {
             // println!("Matching {:?}", self.current);
-            self.advance();
+            self.advance(frame);
             true
         } else {
             false
@@ -378,7 +384,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn synchronize(&mut self) {
+    fn synchronize(&mut self, frame: &mut ObjFunction) {
         self.panic_mode = false;
 
         while self.current.token_type != TokenType::Eof {
@@ -400,52 +406,52 @@ impl<'a> Compiler<'a> {
                 _ => {}
             }
 
-            self.advance();
+            self.advance(frame);
         }
     }
 
-    fn parse_precedence(&mut self, precedence: &Precedence) {
-        self.advance();
+    fn parse_precedence(&mut self, precedence: &Precedence, frame: &mut ObjFunction) {
+        self.advance(frame);
 
         let can_assign = *precedence <= Precedence::Assignment;
-        self.prefix_rule(self.previous.token_type, can_assign);
+        self.prefix_rule(self.previous.token_type, can_assign, frame);
 
         // println!("checking precedence {:?} <= {:?} == {:?}", precedence, &Compiler::get_precedence(self.current.token_type), precedence <= &Compiler::get_precedence(self.current.token_type));
         while precedence <= &Compiler::get_precedence(self.current.token_type) {
-            self.advance();
-            self.infix_rule(self.previous.token_type);
+            self.advance(frame);
+            self.infix_rule(self.previous.token_type, frame);
         }
     }
 
-    fn prefix_rule(&mut self, operator_type: TokenType, can_assign: bool) {
+    fn prefix_rule(&mut self, operator_type: TokenType, can_assign: bool, frame: &mut ObjFunction) {
         match operator_type {
-            TokenType::LeftParen => self.grouping(),
-            TokenType::Minus => self.unary(),
-            TokenType::Number => self.number(),
-            TokenType::True => self.literal(),
-            TokenType::False => self.literal(),
-            TokenType::Nil => self.literal(),
-            TokenType::Bang => self.unary(),
-            TokenType::String => self.string(),
-            TokenType::Identifier => self.variable(can_assign),
+            TokenType::LeftParen => self.grouping(frame),
+            TokenType::Minus => self.unary(frame),
+            TokenType::Number => self.number(frame),
+            TokenType::True => self.literal(frame),
+            TokenType::False => self.literal(frame),
+            TokenType::Nil => self.literal(frame),
+            TokenType::Bang => self.unary(frame),
+            TokenType::String => self.string(frame),
+            TokenType::Identifier => self.variable(can_assign, frame),
             tt => panic!("Expected expresion, got {:?}", tt),
         }
     }
 
-    fn infix_rule(&mut self, operator_type: TokenType) {
+    fn infix_rule(&mut self, operator_type: TokenType, frame: &mut ObjFunction) {
         match operator_type {
-            TokenType::Minus => self.binary(),
-            TokenType::Plus => self.binary(),
-            TokenType::Slash => self.binary(),
-            TokenType::Star => self.binary(),
-            TokenType::BangEqual => self.binary(),
-            TokenType::EqualEqual => self.binary(),
-            TokenType::Greater => self.binary(),
-            TokenType::GreaterEqual => self.binary(),
-            TokenType::Less => self.binary(),
-            TokenType::LessEqual => self.binary(),
-            TokenType::And => self.and(),
-            TokenType::Or => self.or(),
+            TokenType::Minus => self.binary(frame),
+            TokenType::Plus => self.binary(frame),
+            TokenType::Slash => self.binary(frame),
+            TokenType::Star => self.binary(frame),
+            TokenType::BangEqual => self.binary(frame),
+            TokenType::EqualEqual => self.binary(frame),
+            TokenType::Greater => self.binary(frame),
+            TokenType::GreaterEqual => self.binary(frame),
+            TokenType::Less => self.binary(frame),
+            TokenType::LessEqual => self.binary(frame),
+            TokenType::And => self.and(frame),
+            TokenType::Or => self.or(frame),
             _ => (), //panic!("Expect expresion"),
         }
     }
@@ -468,24 +474,24 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn block(&mut self) {
+    fn block(&mut self, frame: &mut ObjFunction) {
         while !self.check(TokenType::RightBrace) && !self.check(TokenType::Eof) {
-            self.declaration();
+            self.declaration(frame);
         }
 
-        self.consume(TokenType::RightBrace, "Expect '}' after block.");
+        self.consume(TokenType::RightBrace, "Expect '}' after block.", frame);
     }
 
-    fn begin_scope(&mut self) {
+    fn begin_scope(&mut self, frame: &mut ObjFunction) {
         self.scope_depth += 1;
     }
 
-    fn end_scope(&mut self) {
+    fn end_scope(&mut self, frame: &mut ObjFunction) {
         self.scope_depth -= 1;
 
         while self.locals.len() > 0 && self.locals.last().unwrap().depth > self.scope_depth {
             self.locals.pop();
-            self.current_chunk().emit(Operation::Pop);
+            frame.chunk.emit(Operation::Pop);
         }
     }
 
@@ -502,7 +508,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn resolve_local(&self, name: &str) -> Option<LocalVarIndex> {
+    fn resolve_local(&self, name: &str, frame: &mut ObjFunction) -> Option<LocalVarIndex> {
         let mut ret = None;
         for (i, local) in self.locals.iter().rev().enumerate() {
             if local.name == name {
@@ -513,34 +519,33 @@ impl<'a> Compiler<'a> {
         ret
     }
 
-    fn if_statement(&mut self) {
-        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
-        self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
+    fn if_statement(&mut self, frame: &mut ObjFunction) {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.", frame);
+        self.expression(frame);
+        self.consume(TokenType::RightParen, "Expect ')' after 'if'.", frame);
 
-        let then_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.current_chunk().emit(Operation::Pop);
-        self.statement();
+        let then_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
+        frame.chunk.emit(Operation::Pop);
+        self.statement(frame);
 
-        let else_jump = self.emit_jump(Operation::Jump(0));
-        self.patch_jump(then_jump);
-        self.current_chunk().emit(Operation::Pop);
+        let else_jump = self.emit_jump(Operation::Jump(0), frame);
+        self.patch_jump(then_jump, frame);
+        frame.chunk.emit(Operation::Pop);
 
-        if self.matches(TokenType::Else) {
-            self.statement();
+        if self.matches(TokenType::Else, frame) {
+            self.statement(frame);
         }
-        self.patch_jump(else_jump);
+        self.patch_jump(else_jump, frame);
     }
 
-    fn emit_jump(&mut self, op: Operation) -> usize {
-        self.current_chunk().emit(op);
-        self.current_chunk().op_count() - 1
+    fn emit_jump(&mut self, op: Operation, frame: &mut ObjFunction) -> usize {
+        frame.chunk.emit(op);
+        frame.chunk.op_count() - 1
     }
 
-    fn patch_jump(&mut self, op_offset: usize) {
-        let chunk = self.current_chunk();
-        let jump = chunk.op_count() - 1 - op_offset;
-        let old_op = chunk
+    fn patch_jump(&mut self, op_offset: usize, frame: &mut ObjFunction) {
+        let jump = frame.chunk.op_count() - 1 - op_offset;
+        let old_op = frame.chunk
             .op_get(op_offset)
             .expect("Tried patching an unexisting operation");
         let new_op = match old_op {
@@ -548,103 +553,139 @@ impl<'a> Compiler<'a> {
             Operation::Jump(_) => Operation::Jump(jump),
             _ => panic!("Tried to patch_jump a non-jump operation"),
         };
-        chunk.op_patch(op_offset, new_op.clone());
+        frame.chunk.op_patch(op_offset, new_op.clone());
     }
 
-    fn and(&mut self) {
-        let end_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.current_chunk().emit(Operation::Pop);
-        self.parse_precedence(&Precedence::And);
-        self.patch_jump(end_jump);
+    fn and(&mut self, frame: &mut ObjFunction) {
+        let end_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
+        frame.chunk.emit(Operation::Pop);
+        self.parse_precedence(&Precedence::And, frame);
+        self.patch_jump(end_jump, frame);
     }
 
-    fn or(&mut self) {
-        let else_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        let end_jump = self.emit_jump(Operation::Jump(0));
+    fn or(&mut self, frame: &mut ObjFunction) {
+        let else_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
+        let end_jump = self.emit_jump(Operation::Jump(0), frame);
 
-        self.patch_jump(else_jump);
-        self.current_chunk().emit(Operation::Pop);
+        self.patch_jump(else_jump, frame);
+        frame.chunk.emit(Operation::Pop);
 
-        self.parse_precedence(&Precedence::Or);
-        self.patch_jump(end_jump);
+        self.parse_precedence(&Precedence::Or, frame);
+        self.patch_jump(end_jump, frame);
     }
 
-    fn while_statement(&mut self) {
-        let loop_start = self.current_chunk().op_count();
-        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
-        self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after 'condition'.");
+    fn while_statement(&mut self, frame: &mut ObjFunction) {
+        let loop_start = frame.chunk.op_count();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.", frame);
+        self.expression(frame);
+        self.consume(TokenType::RightParen, "Expect ')' after 'condition'.", frame);
 
-        let exit_jump = self.emit_jump(Operation::JumpIfFalse(0));
-        self.current_chunk().emit(Operation::Pop);
-        self.statement();
-        self.emit_loop(loop_start);
+        let exit_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
+        frame.chunk.emit(Operation::Pop);
+        self.statement(frame);
+        self.emit_loop(loop_start, frame);
 
-        self.patch_jump(exit_jump);
-        self.current_chunk().emit(Operation::Pop);
+        self.patch_jump(exit_jump, frame);
+        frame.chunk.emit(Operation::Pop);
     }
 
-    fn emit_loop(&mut self, loop_start: usize) {
-        let offset = self.current_chunk().op_count() - loop_start + 1;
-        self.current_chunk().emit(Operation::Loop(offset));
+    fn emit_loop(&mut self, loop_start: usize, frame: &mut ObjFunction) {
+        let offset = frame.chunk.op_count() - loop_start + 1;
+        frame.chunk.emit(Operation::Loop(offset));
     }
 
-    fn for_statement(&mut self) {
-        self.begin_scope();
-        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.");
+    fn for_statement(&mut self, frame: &mut ObjFunction) {
+        self.begin_scope(frame);
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.", frame);
 
         // Initializer
-        if self.matches(TokenType::Semicolon) {
+        if self.matches(TokenType::Semicolon, frame) {
             // No initializer
-        } else if self.matches(TokenType::Var) {
-            self.var_declaration();
+        } else if self.matches(TokenType::Var, frame) {
+            self.var_declaration(frame);
         } else {
-            self.expression_statement();
+            self.expression_statement(frame);
         }
 
         // Conditional
-        let mut loop_start = self.current_chunk().op_count();
+        let mut loop_start = frame.chunk.op_count();
         let mut exit_jump = None;
-        if !self.matches(TokenType::Semicolon) {
-            self.expression();
-            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.");
+        if !self.matches(TokenType::Semicolon, frame) {
+            self.expression(frame);
+            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.", frame);
 
             // Jump out of the loop if the condition is false
-            exit_jump = Some(self.emit_jump(Operation::JumpIfFalse(0)));
-            self.current_chunk().emit(Operation::Pop);
+            exit_jump = Some(self.emit_jump(Operation::JumpIfFalse(0), frame));
+            frame.chunk.emit(Operation::Pop);
         }
 
         // Increment
-        if !self.matches(TokenType::RightParen) {
-            let body_jump = self.emit_jump(Operation::Jump(0));
-            let increment_start = self.current_chunk().op_count();
-            self.expression();
+        if !self.matches(TokenType::RightParen, frame) {
+            let body_jump = self.emit_jump(Operation::Jump(0), frame);
+            let increment_start = frame.chunk.op_count();
+            self.expression(frame);
 
-            self.current_chunk().emit(Operation::Pop);
-            self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
+            frame.chunk.emit(Operation::Pop);
+            self.consume(TokenType::RightParen, "Expect ')' after for clauses.", frame);
 
-            self.emit_loop(loop_start);
+            self.emit_loop(loop_start, frame);
             loop_start = increment_start;
-            self.patch_jump(body_jump);
+            self.patch_jump(body_jump, frame);
         }
 
-        self.statement();
-        self.emit_loop(loop_start);
+        self.statement(frame);
+        self.emit_loop(loop_start, frame);
 
         if let Some(offset) = exit_jump {
-            self.patch_jump(offset);
-            self.current_chunk().emit(Operation::Pop);
+            self.patch_jump(offset, frame);
+            frame.chunk.emit(Operation::Pop);
         }
 
-        self.end_scope();
+        self.end_scope(frame);
     }
 
-    fn current_chunk(&mut self) -> &mut Chunk {
-        &mut self.function.chunk
+    // fn current_chunk(&mut self) -> &mut Chunk {
+    //     &mut self.function.chunk
+    // }
+
+    // pub fn chunk(&self) -> &Chunk {
+    //     &self.function.chunk
+    // }
+
+    fn fun_declaration(&mut self, frame: &mut ObjFunction) {
+        let global = self.parse_variable("Expect function name.", frame);
+        // self.mark_initialized();
+        self.function(global.clone());
+        self.define_variable(global, frame);
     }
 
-    pub fn chunk(&self) -> &Chunk {
-        &self.function.chunk
+    // fn mark_initialized(&self) {
+    //     todo!()
+    // }
+
+    fn function(&mut self, name: String) {
+        // let mut frame = ObjFunction::new(&name);
+        // self.begin_scope(&mut frame);
+
+        // self.consume(
+        //     TokenType::LeftParen,
+        //     "Expect '(' after function name.",
+        //     &mut frame,
+        // );
+        // self.consume(TokenType::RightParen, "Expect ')' after parameters.", &mut frame);
+        // self.consume(
+        //     TokenType::LeftBrace,
+        //     "Expect '{' before function body.",
+        //     &mut frame,
+        // );
+        // self.block(frame);
+
+        // self.end_scope(frame);
+
+        // let constant = frame
+        //     .chunk
+        //     .add_constant(Value::Function(Rc::from(function)));
+        // frame.chunk.emit(Operation::Constant(constant));
     }
 }
 
@@ -1051,11 +1092,16 @@ mod tests {
         let source2 = String::from(source);
         operations.push(Operation::Return);
 
-        let mut compiler = Compiler::from(&source2);
-        compiler.compile();
+        let mut compiler = Compiler::from_source(&source2);
+        let frame = compiler.compile();
 
         assert!(!compiler.had_error, "\nsource: {}", source);
-        assert_eq!(compiler.chunk().code, operations, "\nsource: {}", source);
-        assert_eq!(compiler.chunk().constants, constants, "\nsource: {}", source);
+        assert_eq!(frame.chunk.code, operations, "\nsource: {}", source);
+        assert_eq!(
+            frame.chunk.constants,
+            constants,
+            "\nsource: {}",
+            source
+        );
     }
 }

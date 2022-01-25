@@ -1,6 +1,6 @@
 use std::{rc::Rc, fmt::{Display}};
 
-use crate::object::ObjString;
+use crate::object::{ObjString, ObjFunction};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -8,6 +8,7 @@ pub enum Value {
     Boolean(bool),
     Number(f64),
     String(Rc<ObjString>),
+    Function(Rc<ObjFunction>),
 }
 
 impl PartialEq for Value {
@@ -52,6 +53,7 @@ impl Display for Value {
             Value::Boolean(b) => f.write_str(&b.to_string()),
             Value::Number(n) => f.write_str(&n.to_string()),
             Value::String(obj) => f.write_str(&obj.value),
+            Value::Function(of) => f.write_str(&format!("<fn '{}'>", of.name)),
         }
     }
 }
