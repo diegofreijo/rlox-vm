@@ -2,7 +2,7 @@ use core::panic;
 use std::rc::Rc;
 
 use crate::{
-    chunk::{Chunk, IdentifierName, LocalVarIndex, Operation},
+    chunk::{IdentifierName, LocalVarIndex, Operation},
     object::{ObjFunction, ObjString},
     scanner::Scanner,
     token::{TokenResult, TokenType},
@@ -75,7 +75,7 @@ enum FunctionType {
 }
 
 pub struct Compiler<'a> {
-    frames: Vec<ObjFunction>,
+    // frames: Vec<ObjFunction>,
     // function_type: FunctionType,
     pub had_error: bool,
     panic_mode: bool,
@@ -92,7 +92,7 @@ pub struct Compiler<'a> {
 impl<'a> Compiler<'a> {
     pub fn from_source(source: &'a String) -> Compiler<'a> {
         Compiler {
-            frames: vec![],
+            // frames: vec![],
             // function_type: FunctionType::Script,
             had_error: false,
             panic_mode: false,
@@ -108,9 +108,9 @@ impl<'a> Compiler<'a> {
 
     pub fn compile(&mut self) -> ObjFunction {
         let mut frame = ObjFunction::new("main");
-        self.advance(&mut frame);
+        self.advance();
 
-        while !self.matches(TokenType::Eof, &mut frame) {
+        while !self.matches(TokenType::Eof) {
             self.declaration(&mut frame);
         }
 
@@ -120,10 +120,11 @@ impl<'a> Compiler<'a> {
         if !ret.had_error {
             ret.chunk.disassemble("code");
         }
+
         frame
     }
 
-    fn advance(&mut self, frame: &mut ObjFunction) {
+    fn advance(&mut self) {
         self.previous = self.current.clone();
         loop {
             self.current = self.scanner.scan_token();
@@ -148,7 +149,7 @@ impl<'a> Compiler<'a> {
 
     fn grouping(&mut self, frame: &mut ObjFunction) {
         self.expression(frame);
-        self.consume(TokenType::RightParen, "Expect ')' after expression", frame);
+        self.consume(TokenType::RightParen, "Expect ')' after expression");
     }
 
     fn unary(&mut self, frame: &mut ObjFunction) {
@@ -209,29 +210,29 @@ impl<'a> Compiler<'a> {
     }
 
     fn declaration(&mut self, frame: &mut ObjFunction) {
-        if self.matches(TokenType::Fun, frame) {
+        if self.matches(TokenType::Fun) {
             self.fun_declaration(frame);
-        } else if self.matches(TokenType::Var, frame) {
+        } else if self.matches(TokenType::Var) {
             self.var_declaration(frame);
         } else {
             self.statement(frame);
         }
 
         if self.panic_mode {
-            self.synchronize(frame);
+            self.synchronize();
         }
     }
 
     fn statement(&mut self, frame: &mut ObjFunction) {
-        if self.matches(TokenType::Print, frame) {
+        if self.matches(TokenType::Print) {
             self.print_statement(frame);
-        } else if self.matches(TokenType::If, frame) {
+        } else if self.matches(TokenType::If) {
             self.if_statement(frame);
-        } else if self.matches(TokenType::While, frame) {
+        } else if self.matches(TokenType::While) {
             self.while_statement(frame);
-        } else if self.matches(TokenType::For, frame) {
+        } else if self.matches(TokenType::For) {
             self.for_statement(frame);
-        } else if self.matches(TokenType::LeftBrace, frame) {
+        } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope(frame);
             self.block(frame);
             self.end_scope(frame);
@@ -242,13 +243,13 @@ impl<'a> Compiler<'a> {
 
     fn expression_statement(&mut self, frame: &mut ObjFunction) {
         self.expression(frame);
-        self.consume(TokenType::Semicolon, "Expect ';' after expression.", frame);
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
         frame.chunk.emit(Operation::Pop);
     }
 
     fn print_statement(&mut self, frame: &mut ObjFunction) {
         self.expression(frame);
-        self.consume(TokenType::Semicolon, "Expect ';' after value.", frame);
+        self.consume(TokenType::Semicolon, "Expect ';' after value.");
         frame.chunk.emit(Operation::Print);
     }
 
@@ -261,7 +262,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn global_var_declaration(&mut self, frame: &mut ObjFunction) {
-        self.parse_variable("Expect variable name.", frame);
+        self.parse_variable("Expect variable name.");
         // TODO: see how can I remove this clone()
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
 
@@ -269,18 +270,18 @@ impl<'a> Compiler<'a> {
 
         self.consume(
             TokenType::Semicolon,
-            "Expect ';' after variable declaration.", frame
+            "Expect ';' after variable declaration.",
         );
         self.define_variable(name, frame);
     }
 
-    fn parse_variable(&mut self, error_message: &str, frame: &mut ObjFunction) -> IdentifierName {
-        self.consume(TokenType::Identifier, error_message, frame);
+    fn parse_variable(&mut self, error_message: &str) -> IdentifierName {
+        self.consume(TokenType::Identifier, error_message);
         self.previous.data.as_ref().unwrap().lexeme.to_string()
     }
 
     fn local_var_declaration(&mut self, frame: &mut ObjFunction) {
-        self.consume(TokenType::Identifier, "Expect variable name.", frame);
+        self.consume(TokenType::Identifier, "Expect variable name.");
         // TODO: see how can I remove this clone()
         let name = self.previous.clone().data.unwrap().lexeme.to_string();
 
@@ -288,12 +289,12 @@ impl<'a> Compiler<'a> {
         self.declare_local(name);
         self.consume(
             TokenType::Semicolon,
-            "Expect ';' after variable declaration.",frame
+            "Expect ';' after variable declaration.",
         );
     }
 
     fn variable_expression(&mut self, frame: &mut ObjFunction) {
-        if self.matches(TokenType::Equal, frame) {
+        if self.matches(TokenType::Equal) {
             self.expression(frame);
         } else {
             frame.chunk.emit(Operation::Nil);
@@ -324,14 +325,14 @@ impl<'a> Compiler<'a> {
         // TODO: clean up this chain of ifs without creating operations are are not going to be used.
         if let Some(i) = self.resolve_local(&name, frame) {
             // self.emit_variable(Operation::GetLocal(i), Operation::SetLocal(i), can_assign);
-            if can_assign && self.matches(TokenType::Equal, frame) {
+            if can_assign && self.matches(TokenType::Equal) {
                 self.expression(frame);
                 frame.chunk.emit(Operation::SetLocal(i));
             } else {
                 frame.chunk.emit(Operation::GetLocal(i));
             }
         } else {
-            if can_assign && self.matches(TokenType::Equal, frame) {
+            if can_assign && self.matches(TokenType::Equal) {
                 self.expression(frame);
                 frame.chunk.emit(Operation::SetGlobal(name));
             } else {
@@ -340,27 +341,18 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // fn emit_variable<F>(&mut self, get_op: fn() -> Operation, set_op: Operation, can_assign: bool) {
-    //     if can_assign && self.matches(TokenType::Equal) {
-    //         self.expression();
-    //         frame.chunk.emit(set_op);
-    //     } else {
-    //         frame.chunk.emit(get_op);
-    //     }
-    // }
-
-    fn consume(&mut self, expected: TokenType, message: &str, frame: &mut ObjFunction) {
+    fn consume(&mut self, expected: TokenType, message: &str) {
         if self.current.token_type == expected {
-            self.advance(frame);
+            self.advance();
         } else {
             self.error_at_current(message);
         }
     }
 
-    fn matches(&mut self, expected: TokenType, frame: &mut ObjFunction) -> bool {
+    fn matches(&mut self, expected: TokenType) -> bool {
         if self.check(expected) {
             // println!("Matching {:?}", self.current);
-            self.advance(frame);
+            self.advance();
             true
         } else {
             false
@@ -384,7 +376,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn synchronize(&mut self, frame: &mut ObjFunction) {
+    fn synchronize(&mut self) {
         self.panic_mode = false;
 
         while self.current.token_type != TokenType::Eof {
@@ -406,19 +398,19 @@ impl<'a> Compiler<'a> {
                 _ => {}
             }
 
-            self.advance(frame);
+            self.advance();
         }
     }
 
     fn parse_precedence(&mut self, precedence: &Precedence, frame: &mut ObjFunction) {
-        self.advance(frame);
+        self.advance();
 
         let can_assign = *precedence <= Precedence::Assignment;
         self.prefix_rule(self.previous.token_type, can_assign, frame);
 
         // println!("checking precedence {:?} <= {:?} == {:?}", precedence, &Compiler::get_precedence(self.current.token_type), precedence <= &Compiler::get_precedence(self.current.token_type));
         while precedence <= &Compiler::get_precedence(self.current.token_type) {
-            self.advance(frame);
+            self.advance();
             self.infix_rule(self.previous.token_type, frame);
         }
     }
@@ -479,7 +471,7 @@ impl<'a> Compiler<'a> {
             self.declaration(frame);
         }
 
-        self.consume(TokenType::RightBrace, "Expect '}' after block.", frame);
+        self.consume(TokenType::RightBrace, "Expect '}' after block.");
     }
 
     fn begin_scope(&mut self, frame: &mut ObjFunction) {
@@ -520,9 +512,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn if_statement(&mut self, frame: &mut ObjFunction) {
-        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.", frame);
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
         self.expression(frame);
-        self.consume(TokenType::RightParen, "Expect ')' after 'if'.", frame);
+        self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
 
         let then_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
         frame.chunk.emit(Operation::Pop);
@@ -532,7 +524,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(then_jump, frame);
         frame.chunk.emit(Operation::Pop);
 
-        if self.matches(TokenType::Else, frame) {
+        if self.matches(TokenType::Else) {
             self.statement(frame);
         }
         self.patch_jump(else_jump, frame);
@@ -545,7 +537,8 @@ impl<'a> Compiler<'a> {
 
     fn patch_jump(&mut self, op_offset: usize, frame: &mut ObjFunction) {
         let jump = frame.chunk.op_count() - 1 - op_offset;
-        let old_op = frame.chunk
+        let old_op = frame
+            .chunk
             .op_get(op_offset)
             .expect("Tried patching an unexisting operation");
         let new_op = match old_op {
@@ -576,9 +569,9 @@ impl<'a> Compiler<'a> {
 
     fn while_statement(&mut self, frame: &mut ObjFunction) {
         let loop_start = frame.chunk.op_count();
-        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.", frame);
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
         self.expression(frame);
-        self.consume(TokenType::RightParen, "Expect ')' after 'condition'.", frame);
+        self.consume(TokenType::RightParen, "Expect ')' after 'condition'.");
 
         let exit_jump = self.emit_jump(Operation::JumpIfFalse(0), frame);
         frame.chunk.emit(Operation::Pop);
@@ -596,12 +589,12 @@ impl<'a> Compiler<'a> {
 
     fn for_statement(&mut self, frame: &mut ObjFunction) {
         self.begin_scope(frame);
-        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.", frame);
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.");
 
         // Initializer
-        if self.matches(TokenType::Semicolon, frame) {
+        if self.matches(TokenType::Semicolon) {
             // No initializer
-        } else if self.matches(TokenType::Var, frame) {
+        } else if self.matches(TokenType::Var) {
             self.var_declaration(frame);
         } else {
             self.expression_statement(frame);
@@ -610,9 +603,9 @@ impl<'a> Compiler<'a> {
         // Conditional
         let mut loop_start = frame.chunk.op_count();
         let mut exit_jump = None;
-        if !self.matches(TokenType::Semicolon, frame) {
+        if !self.matches(TokenType::Semicolon) {
             self.expression(frame);
-            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.", frame);
+            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.");
 
             // Jump out of the loop if the condition is false
             exit_jump = Some(self.emit_jump(Operation::JumpIfFalse(0), frame));
@@ -620,13 +613,13 @@ impl<'a> Compiler<'a> {
         }
 
         // Increment
-        if !self.matches(TokenType::RightParen, frame) {
+        if !self.matches(TokenType::RightParen) {
             let body_jump = self.emit_jump(Operation::Jump(0), frame);
             let increment_start = frame.chunk.op_count();
             self.expression(frame);
 
             frame.chunk.emit(Operation::Pop);
-            self.consume(TokenType::RightParen, "Expect ')' after for clauses.", frame);
+            self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
 
             self.emit_loop(loop_start, frame);
             loop_start = increment_start;
@@ -653,7 +646,7 @@ impl<'a> Compiler<'a> {
     // }
 
     fn fun_declaration(&mut self, frame: &mut ObjFunction) {
-        let global = self.parse_variable("Expect function name.", frame);
+        let global = self.parse_variable("Expect function name.");
         // self.mark_initialized();
         self.function(global.clone());
         self.define_variable(global, frame);
@@ -1097,11 +1090,6 @@ mod tests {
 
         assert!(!compiler.had_error, "\nsource: {}", source);
         assert_eq!(frame.chunk.code, operations, "\nsource: {}", source);
-        assert_eq!(
-            frame.chunk.constants,
-            constants,
-            "\nsource: {}",
-            source
-        );
+        assert_eq!(frame.chunk.constants, constants, "\nsource: {}", source);
     }
 }
