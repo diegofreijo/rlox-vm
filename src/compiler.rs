@@ -648,37 +648,40 @@ impl<'a> Compiler<'a> {
     fn fun_declaration(&mut self, frame: &mut ObjFunction) {
         let global = self.parse_variable("Expect function name.");
         // self.mark_initialized();
-        self.function(global.clone());
+        let new_frame = self.function(global.clone());
+
+        let function_value = Value::Function(Rc::from(new_frame));
+        let constant = frame.chunk.add_constant(function_value);
+        frame.chunk.emit(Operation::Constant(constant));
+
         self.define_variable(global, frame);
     }
 
-    // fn mark_initialized(&self) {
-    //     todo!()
-    // }
+    fn function(&mut self, name: String) -> ObjFunction {
+        let mut frame = ObjFunction::new(&name);
 
-    fn function(&mut self, name: String) {
-        // let mut frame = ObjFunction::new(&name);
-        // self.begin_scope(&mut frame);
+        self.begin_scope(&mut frame);
 
-        // self.consume(
-        //     TokenType::LeftParen,
-        //     "Expect '(' after function name.",
-        //     &mut frame,
-        // );
-        // self.consume(TokenType::RightParen, "Expect ')' after parameters.", &mut frame);
-        // self.consume(
-        //     TokenType::LeftBrace,
-        //     "Expect '{' before function body.",
-        //     &mut frame,
-        // );
-        // self.block(frame);
+        self.consume(TokenType::LeftParen, "Expect '(' after function name.");
+        
+        // Function parameters
+        if !self.check(TokenType::RightParen) {
+            loop {
+                frame.arity += 1;
+                let parameter_name = self.parse_variable("Expect parameter name.");
+                // self.define_variable(parameter_name, &mut frame);
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            } 
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.");
+        self.consume(TokenType::LeftBrace, "Expect '{' before function body.");
+        self.block(&mut frame);
 
-        // self.end_scope(frame);
+        self.end_scope(&mut frame);
 
-        // let constant = frame
-        //     .chunk
-        //     .add_constant(Value::Function(Rc::from(function)));
-        // frame.chunk.emit(Operation::Constant(constant));
+        frame
     }
 }
 

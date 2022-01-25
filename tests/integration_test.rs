@@ -43,3 +43,18 @@ fn runtime_errors() {
         "Undefined variable 'a'",
     );
 }
+
+
+
+
+#[test]
+fn functions() {
+    assert_script_output(
+        "fun pepe() {
+  print 1;
+}
+
+print pepe;",
+        "<fn 'pepe'>",
+    );
+}

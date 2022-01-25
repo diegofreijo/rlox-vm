@@ -2,7 +2,7 @@ use crate::chunk::Chunk;
 
 #[derive(Debug)]
 pub struct ObjFunction {
-    arity: u8,
+    pub arity: u8,
     pub chunk: Chunk,
     pub name: String,
 }
