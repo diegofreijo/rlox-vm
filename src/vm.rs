@@ -3,32 +3,53 @@ use std::{collections::HashMap, io::Write, rc::Rc};
 use crate::{
     chunk::{Chunk, IdentifierName},
     stack::Stack,
-    value::{ Value},object::ObjString
+    value::{ Value},object::{ObjString, ObjFunction}
 };
 
 pub type InterpretResult<V> = Result<V, String>;
 
+struct CallFrame {
+    function: ObjFunction,
+    ip: usize,
+    first_slot: usize,
+}
+
+impl CallFrame {
+    pub fn new(function: ObjFunction) -> Self {
+        CallFrame {
+            function,
+            ip: 0,
+            first_slot: 0,
+        }
+    }
+}
+
 pub struct VM {
     stack: Stack,
     globals: HashMap<IdentifierName, Value>,
+    frames: Vec<CallFrame>,
 }
 
-impl VM {
+impl  VM {
     pub fn new() -> Self {
         VM {
             stack: Stack::new(),
             globals: HashMap::new(),
+            frames: vec![],
         }
     }
 
-    pub fn run<W: Write>(&mut self, chunk: &Chunk, output: &mut W) -> InterpretResult<()> {
-        let code = chunk.code();
-        let mut ip = 0;
+    pub fn run<W: Write>(&mut self, function: ObjFunction, output: &mut W) -> InterpretResult<()> {
+        self.frames = vec![CallFrame::new(function)];
+        let mut frame = self.frames.first_mut().ok_or("")?;
+        let code = frame.function.chunk.code();
+        let chunk = &frame.function.chunk;
+        
         loop {
             let op = code
-                .get(ip)
-                .ok_or(&format!("Operation not found. ip: {}", ip))?;
-            ip += 1;
+                .get(frame.ip)
+                .ok_or(&format!("Operation not found. ip: {}", frame.ip))?;
+            frame.ip += 1;
 
             #[cfg(feature = "trace")]
             {
@@ -55,10 +76,7 @@ impl VM {
                     self.stack.push(val.clone());
                 }
                 crate::chunk::Operation::DefineGlobal(name) => {
-                    self.globals.insert(name.clone(), self.stack.pop().unwrap());
-                    // let name = VM::pop_string(&mut self.stack);
-                    // self.globals
-                    //     .insert(String::from(name.value()), self.stack.pop().unwrap());
+                    self.globals.insert(name.clone(), self.stack.pop()?);
                 }
                 crate::chunk::Operation::SetGlobal(name) => {
                     if !self.globals.contains_key(name) {
@@ -69,26 +87,26 @@ impl VM {
                         .insert(name.clone(), self.stack.peek()?.clone());
                 }
                 crate::chunk::Operation::GetLocal(i) => {
-                    // let stack_index = self.stack.len() - 1 - i;
+                    let absolute_index = i  + frame.first_slot;
                     let val = self
                         .stack
-                        .get(*i)?
+                        .get(absolute_index)?
                         // .expect("Local variable not found in the stack")
                         .clone();
                     self.stack.push(val);
                 }
                 crate::chunk::Operation::SetLocal(i) => {
-                    // let stack_index = self.stack.len() - 1 - i;
+                    let absolute_index =  frame.first_slot + i;
                     let val = self
                         .stack
                         .peek()?
                         // .expect("Expression not found in the stack to assign to local")
                         .clone();
-                    self.stack.set(*i, val);
+                    self.stack.set(absolute_index, val);
                 }
                 crate::chunk::Operation::Equal => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop()?;
+                    let a = self.stack.pop()?;
                     self.stack.push(Value::Boolean(a == b));
                 }
                 crate::chunk::Operation::Greater => {
@@ -120,7 +138,7 @@ impl VM {
                     VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?
                 }
                 crate::chunk::Operation::Not => {
-                    let old = self.stack.pop().unwrap();
+                    let old = self.stack.pop()?;
                     let new = old.is_falsey();
                     self.stack.push(Value::Boolean(new));
                 }
@@ -146,11 +164,11 @@ impl VM {
                 crate::chunk::Operation::JumpIfFalse(offset) => {
                     let exp = self.stack.peek()?;//.expect("Missing the if expression");
                     if exp.is_falsey() {
-                        ip += offset;
+                        frame.ip += offset;
                     }
                 }
-                crate::chunk::Operation::Jump(offset) => ip += offset,
-                crate::chunk::Operation::Loop(offset) => ip -= offset,
+                crate::chunk::Operation::Jump(offset) => frame.ip += offset,
+                crate::chunk::Operation::Loop(offset) => frame.ip -= offset,
             }
         }
     }

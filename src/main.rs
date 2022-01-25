@@ -39,7 +39,7 @@ fn repl() {
         let mut compiler = Compiler::from(&source);
         compiler.compile();
         if !compiler.had_error {
-            let result = vm.run(&compiler.chunk(), &mut stdout);
+            let result = vm.run(compiler.function, &mut stdout);
             if let Err(msg) = result {
                 println!("[Runime Error] {}", msg);
             }

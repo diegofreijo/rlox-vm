@@ -39,7 +39,7 @@ fn loops() {
 #[test]
 fn runtime_errors() {
     assert_script_error(
-        "print a;",
+        "var b; print a;",
         "Undefined variable 'a'",
     );
 }
