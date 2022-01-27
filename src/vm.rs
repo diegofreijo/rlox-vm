@@ -146,10 +146,8 @@ impl<'a> VM<'a> {
                     .map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
                 }
                 Operation::Return => {
-                    // match self.stack.pop() {
-                    //     Some(val) => ret = InterpretResult::Ok(val),
-                    //     None => ret = InterpretResult::Ok(Value::Nil),
-                    // }
+                    let result = self.stack.pop()?;
+
                     return Ok(());
                 }
                 Operation::JumpIfFalse(offset) => {
@@ -179,9 +177,14 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
-    fn call_value<W: Write>(&mut self, callee: &Value, arg_count: u8, output: &mut W) -> InterpretResult<()> {
+    fn call_value<W: Write>(
+        &mut self,
+        callee: &Value,
+        arg_count: u8,
+        output: &mut W,
+    ) -> InterpretResult<()> {
         match callee {
-            Value::Function(fun) => self.call(fun, arg_count, output),
+            Value::Function(fun) => self.run(fun, output),
             other => Err(format!(
                 "Expected a function or a class to call, but found {}",
                 other
@@ -189,7 +192,7 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn call<W: Write>(&mut self, fun: &ObjFunction, arg_count: u8, output: &mut W) -> InterpretResult<()> {
-        self.run(fun, output)
-    }
+    // fn call<W: Write>(&mut self, fun: &ObjFunction, arg_count: u8, output: &mut W) -> InterpretResult<()> {
+    //     self.run(fun, output)
+    // }
 }

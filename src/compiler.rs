@@ -116,6 +116,7 @@ impl<'a> Compiler<'a> {
             self.declaration(&mut frame);
         }
 
+        frame.chunk.emit(Operation::Nil);
         frame.chunk.emit(Operation::Return);
 
         #[cfg(feature = "debug_print_code")]
@@ -687,7 +688,11 @@ Compiler state: {:#?}
         }
         self.consume(TokenType::RightParen, "Expect ')' after parameters.");
         self.consume(TokenType::LeftBrace, "Expect '{' before function body.");
+        
         self.block(&mut frame);
+
+        frame.chunk.emit(Operation::Nil);
+        frame.chunk.emit(Operation::Return);
 
         self.end_scope(&mut frame);
 
@@ -1117,6 +1122,8 @@ mod tests {
         pepe.chunk.emit_many(&mut vec![
             Operation::Constant(0),
             Operation::Print,
+            Operation::Nil,
+            Operation::Return,
         ]);
         pepe.chunk.add_constant(Value::Number(1.0));
 
@@ -1154,6 +1161,7 @@ mod tests {
 
     fn assert_chunk(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
         let source2 = String::from(source);
+        operations.push(Operation::Nil);
         operations.push(Operation::Return);
 
         let mut compiler = Compiler::from_source(&source2);
