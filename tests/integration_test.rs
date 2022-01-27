@@ -48,7 +48,7 @@ fn runtime_errors() {
 
 
 #[test]
-fn functions() {
+fn procedures() {
     assert_script_output(
         "fun pepe() { print 1; } print pepe;",
         "<fn 'pepe'>",
@@ -56,5 +56,23 @@ fn functions() {
     assert_script_output(
         "fun pepe() { print 1; } pepe();",
         "1",
+    );
+    assert_script_output(
+        "fun pepe() { print 1; } print pepe();",
+        "1\nnil",
+    );
+}
+
+
+
+#[test]
+fn functions() {
+    assert_script_output(
+        "fun add(a, b) { return a + b; } print add;",
+        "<fn 'add'>",
+    );
+    assert_script_output(
+        "fun add(a, b) { return a + b; } print add(2,3);",
+        "5",
     );
 }

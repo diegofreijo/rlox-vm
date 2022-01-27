@@ -9,6 +9,7 @@ use crate::{
 
 pub type InterpretResult<V> = Result<V, String>;
 
+#[derive(Clone)]
 struct CallFrame<'a> {
     function: &'a ObjFunction,
     ip: usize,
@@ -16,34 +17,37 @@ struct CallFrame<'a> {
 }
 
 impl<'a> CallFrame<'a> {
-    pub fn new(function: &'a ObjFunction) -> Self {
+    pub fn new(function: &'a ObjFunction, first_slot: usize) -> Self {
         CallFrame {
             function,
             ip: 0,
-            first_slot: 0,
+            first_slot,
         }
     }
 }
 
-pub struct VM<'a> {
+pub struct VM {
     stack: Stack,
     globals: HashMap<IdentifierName, Value>,
-    frames: Vec<CallFrame<'a>>,
+    call_stack: Vec<String>,
 }
 
-impl<'a> VM<'a> {
+impl VM {
     pub fn new() -> Self {
         VM {
             stack: Stack::new(),
             globals: HashMap::new(),
-            frames: vec![],
+            call_stack: vec![],
         }
     }
 
     pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
         // self.frames = vec![CallFrame::new(function)];
         // let mut frame = self.frames.first_mut().ok_or("This can't happen ever")?;
-        let mut frame = CallFrame::new(function);
+
+        let mut frame = CallFrame::new(function, self.call_stack.len());
+        self.call_stack.push(function.name.clone());
+
         let code = frame.function.chunk.code();
         let chunk = &frame.function.chunk;
 
@@ -146,8 +150,8 @@ impl<'a> VM<'a> {
                     .map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
                 }
                 Operation::Return => {
-                    let result = self.stack.pop()?;
-
+                    // let result = self.stack.pop()?;
+                    self.call_stack.pop();
                     return Ok(());
                 }
                 Operation::JumpIfFalse(offset) => {

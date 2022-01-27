@@ -116,8 +116,7 @@ impl<'a> Compiler<'a> {
             self.declaration(&mut frame);
         }
 
-        frame.chunk.emit(Operation::Nil);
-        frame.chunk.emit(Operation::Return);
+        self.emit_return(&mut frame);
 
         #[cfg(feature = "debug_print_code")]
         if !ret.had_error {
@@ -231,6 +230,8 @@ impl<'a> Compiler<'a> {
             self.print_statement(frame);
         } else if self.matches(TokenType::If) {
             self.if_statement(frame);
+        } else if self.matches(TokenType::Return) {
+            self.return_statement(frame);
         } else if self.matches(TokenType::While) {
             self.while_statement(frame);
         } else if self.matches(TokenType::For) {
@@ -238,7 +239,7 @@ impl<'a> Compiler<'a> {
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope(frame);
             self.block(frame);
-            self.end_scope(frame);
+            self.end_scope(frame, true);
         } else {
             self.expression_statement(frame);
         }
@@ -305,7 +306,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn define_variable(&mut self, name: IdentifierName, frame: &mut ObjFunction) {
-        frame.chunk.emit(Operation::DefineGlobal(name));
+        if self.scope_depth > 0 {
+            self.mark_initialized();
+        } else {
+            frame.chunk.emit(Operation::DefineGlobal(name));
+        }
     }
 
     fn declare_local(&mut self, name: IdentifierName) {
@@ -374,10 +379,13 @@ impl<'a> Compiler<'a> {
     fn error_at(&mut self, line: i32, message: &str) {
         if !self.panic_mode {
             self.panic_mode = true;
-            println!("
+            println!(
+                "
 [line {}] Error: {}
 Compiler state: {:#?}
-", line, message, self);
+",
+                line, message, self
+            );
             self.had_error = true;
         }
     }
@@ -486,12 +494,14 @@ Compiler state: {:#?}
         self.scope_depth += 1;
     }
 
-    fn end_scope(&mut self, frame: &mut ObjFunction) {
+    fn end_scope(&mut self, frame: &mut ObjFunction, undefine_locals: bool) {
         self.scope_depth -= 1;
 
-        while self.locals.len() > 0 && self.locals.last().unwrap().depth > self.scope_depth {
-            self.locals.pop();
-            frame.chunk.emit(Operation::Pop);
+        if undefine_locals {
+            while self.locals.len() > 0 && self.locals.last().unwrap().depth > self.scope_depth {
+                self.locals.pop();
+                frame.chunk.emit(Operation::Pop);
+            }
         }
     }
 
@@ -642,16 +652,8 @@ Compiler state: {:#?}
             frame.chunk.emit(Operation::Pop);
         }
 
-        self.end_scope(frame);
+        self.end_scope(frame, true);
     }
-
-    // fn current_chunk(&mut self) -> &mut Chunk {
-    //     &mut self.function.chunk
-    // }
-
-    // pub fn chunk(&self) -> &Chunk {
-    //     &self.function.chunk
-    // }
 
     fn fun_declaration(&mut self, frame: &mut ObjFunction) {
         let global = self.parse_variable("Expect function name.");
@@ -671,30 +673,29 @@ Compiler state: {:#?}
         self.begin_scope(&mut frame);
 
         self.consume(TokenType::LeftParen, "Expect '(' after function name.");
-        
+
         // Function parameters
         if !self.check(TokenType::RightParen) {
             loop {
                 frame.arity += 1;
 
-                // TODO: I don't do anything with the parameters because I'm not validating
-                // local variables with markInitialized like the book does.
-                let _parameter_name = self.parse_variable("Expect parameter name.");
+                self.consume(TokenType::Identifier, "Expect parameter name.");
+                let name = self.previous.clone().data.unwrap().lexeme.to_string();
+                self.declare_local(name);
+
                 // self.define_variable(parameter_name, &mut frame);
                 if !self.matches(TokenType::Comma) {
                     break;
                 }
-            } 
+            }
         }
         self.consume(TokenType::RightParen, "Expect ')' after parameters.");
         self.consume(TokenType::LeftBrace, "Expect '{' before function body.");
-        
+
         self.block(&mut frame);
+        self.emit_return(&mut frame);
 
-        frame.chunk.emit(Operation::Nil);
-        frame.chunk.emit(Operation::Return);
-
-        self.end_scope(&mut frame);
+        self.end_scope(&mut frame, false);
 
         frame
     }
@@ -704,7 +705,7 @@ Compiler state: {:#?}
         frame.chunk.emit(Operation::Call(arg_count));
     }
 
-    fn argument_list(&mut self,  frame: &mut ObjFunction) -> u8 {
+    fn argument_list(&mut self, frame: &mut ObjFunction) -> u8 {
         let mut ret = 0;
         if !self.check(TokenType::RightParen) {
             loop {
@@ -718,15 +719,33 @@ Compiler state: {:#?}
         self.consume(TokenType::RightParen, "Expect ')' after arguments.");
         ret
     }
+
+    fn return_statement(&mut self, frame: &mut ObjFunction) {
+        // Contrary of the book, I do allow return statements outside a function.
+        if self.matches(TokenType::Semicolon) {
+            self.emit_return(frame);
+        } else {
+            self.expression(frame);
+            self.consume(TokenType::Semicolon, "Expected ';' after return value.");
+            frame.chunk.emit(Operation::Return);
+        }
+    }
+
+    fn emit_return(&self, frame: &mut ObjFunction) {
+        frame.chunk.emit(Operation::Nil);
+        frame.chunk.emit(Operation::Return);
+    }
+
+    fn mark_initialized(&self) {
+        // TODO: I'm not validating local variables with markInitialized like the book does.
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
-    use crate::{chunk::Operation, value::Value, object::ObjFunction};
-
     use super::Compiler;
+    use crate::{chunk::Operation, object::ObjFunction, value::Value};
+    use std::rc::Rc;
 
     #[test]
     fn constants() {
@@ -1114,9 +1133,8 @@ mod tests {
         );
     }
 
-
     #[test]
-    fn functions() {
+    fn procedures() {
         // Definition of pepe, will use it on the tests
         let mut pepe = ObjFunction::new("pepe");
         pepe.chunk.emit_many(&mut vec![
@@ -1150,6 +1168,62 @@ mod tests {
             ],
             vec![Value::Function(Rc::from(pepe.clone()))],
         );
+
+        assert_chunk(
+            "fun pepe() { print 1; } print pepe();",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("pepe".to_string()),
+                // Call
+                Operation::GetGlobal("pepe".to_string()),
+                Operation::Call(0),
+                Operation::Print,
+            ],
+            vec![Value::Function(Rc::from(pepe.clone()))],
+        );
+    }
+
+    #[test]
+    fn functions() {
+        // Definition of add, will use it on the tests
+        let mut add = ObjFunction::new("add");
+        add.arity = 2;
+        add.chunk.emit_many(&mut vec![
+            Operation::GetLocal(1),
+            Operation::GetLocal(0),
+            Operation::Add,
+            Operation::Return,
+            Operation::Nil,
+            Operation::Return,
+        ]);
+
+        assert_chunk(
+            "fun add(a, b) { return a + b; }",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("add".to_string()),
+            ],
+            vec![Value::Function(Rc::from(add.clone()))],
+        );
+
+        assert_chunk(
+            "fun add(a, b) { return a + b; } print add(2,3);",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("add".to_string()),
+                // Call
+                Operation::GetGlobal("add".to_string()),
+                Operation::Constant(1),
+                Operation::Constant(2),
+                Operation::Call(2),
+                // Print
+                Operation::Print,
+            ],
+            vec![Value::Function(Rc::from(add.clone())), Value::Number(2.0), Value::Number(3.0)],
+        );
     }
 
     //////////////////////////
@@ -1167,8 +1241,20 @@ mod tests {
         let mut compiler = Compiler::from_source(&source2);
         let frame = compiler.compile();
 
-        assert!(!compiler.had_error, "\nCOMPILER ERROR for source: {}", source);
-        assert_eq!(frame.chunk.code, operations, "\nOPERATIONS failed for source: {}", source);
-        assert_eq!(frame.chunk.constants, constants, "\nCONSTANTS failed for source:\n\t{}", source);
+        assert!(
+            !compiler.had_error,
+            "\nCOMPILER ERROR for source: {}",
+            source
+        );
+        assert_eq!(
+            frame.chunk.code, operations,
+            "\nOPERATIONS failed for source: {}",
+            source
+        );
+        assert_eq!(
+            frame.chunk.constants, constants,
+            "\nCONSTANTS failed for source:\n\t{}",
+            source
+        );
     }
 }
