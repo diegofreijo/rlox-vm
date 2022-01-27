@@ -17,6 +17,8 @@ impl PartialEq for Value {
             (Self::Boolean(l0), Self::Boolean(r0)) => l0 == r0,
             (Self::Number(l0), Self::Number(r0)) => l0 == r0,
             (Self::String(l0), Self::String(r0)) => l0.value == r0.value,
+            (Self::Function(f1), Self::Function(f2)) => 
+                f1.chunk == f2.chunk && f1.arity == f2.arity && f1.name == f2.name,
             _ => false,
         }
     }

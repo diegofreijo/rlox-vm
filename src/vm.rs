@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io::Write, rc::Rc};
 
 use crate::{
-    chunk::IdentifierName,
+    chunk::{IdentifierName, Operation},
     object::{ObjFunction, ObjString},
     stack::Stack,
     value::Value,
@@ -9,14 +9,14 @@ use crate::{
 
 pub type InterpretResult<V> = Result<V, String>;
 
-struct CallFrame {
-    function: ObjFunction,
+struct CallFrame<'a> {
+    function: &'a ObjFunction,
     ip: usize,
     first_slot: usize,
 }
 
-impl CallFrame {
-    pub fn new(function: ObjFunction) -> Self {
+impl<'a> CallFrame<'a> {
+    pub fn new(function: &'a ObjFunction) -> Self {
         CallFrame {
             function,
             ip: 0,
@@ -25,13 +25,13 @@ impl CallFrame {
     }
 }
 
-pub struct VM {
+pub struct VM<'a> {
     stack: Stack,
     globals: HashMap<IdentifierName, Value>,
-    frames: Vec<CallFrame>,
+    frames: Vec<CallFrame<'a>>,
 }
 
-impl VM {
+impl<'a> VM<'a> {
     pub fn new() -> Self {
         VM {
             stack: Stack::new(),
@@ -40,9 +40,10 @@ impl VM {
         }
     }
 
-    pub fn run<W: Write>(&mut self, function: ObjFunction, output: &mut W) -> InterpretResult<()> {
-        self.frames = vec![CallFrame::new(function)];
-        let mut frame = self.frames.first_mut().ok_or("This can't happen ever")?;
+    pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
+        // self.frames = vec![CallFrame::new(function)];
+        // let mut frame = self.frames.first_mut().ok_or("This can't happen ever")?;
+        let mut frame = CallFrame::new(function);
         let code = frame.function.chunk.code();
         let chunk = &frame.function.chunk;
 
@@ -59,27 +60,27 @@ impl VM {
             }
 
             match op {
-                crate::chunk::Operation::Constant(iid) => {
+                Operation::Constant(iid) => {
                     let c = chunk.read_constant(*iid);
                     self.stack.push(c.clone());
                 }
-                crate::chunk::Operation::Nil => self.stack.push(Value::Nil),
-                crate::chunk::Operation::True => self.stack.push(Value::Boolean(true)),
-                crate::chunk::Operation::False => self.stack.push(Value::Boolean(false)),
-                crate::chunk::Operation::Pop => {
+                Operation::Nil => self.stack.push(Value::Nil),
+                Operation::True => self.stack.push(Value::Boolean(true)),
+                Operation::False => self.stack.push(Value::Boolean(false)),
+                Operation::Pop => {
                     self.stack.pop()?; //.expect("There was nothing to pop");
                 }
-                crate::chunk::Operation::GetGlobal(name) => {
+                Operation::GetGlobal(name) => {
                     let val = self
                         .globals
                         .get(name)
                         .ok_or(&format!("Undefined variable '{}'", name))?;
                     self.stack.push(val.clone());
                 }
-                crate::chunk::Operation::DefineGlobal(name) => {
+                Operation::DefineGlobal(name) => {
                     self.globals.insert(name.clone(), self.stack.pop()?);
                 }
-                crate::chunk::Operation::SetGlobal(name) => {
+                Operation::SetGlobal(name) => {
                     if !self.globals.contains_key(name) {
                         return Err(format!("Undefined variable '{}'", name));
                     }
@@ -87,7 +88,7 @@ impl VM {
                     self.globals
                         .insert(name.clone(), self.stack.peek()?.clone());
                 }
-                crate::chunk::Operation::GetLocal(i) => {
+                Operation::GetLocal(i) => {
                     let absolute_index = i + frame.first_slot;
                     let val = self
                         .stack
@@ -96,7 +97,7 @@ impl VM {
                         .clone();
                     self.stack.push(val);
                 }
-                crate::chunk::Operation::SetLocal(i) => {
+                Operation::SetLocal(i) => {
                     let absolute_index = frame.first_slot + i;
                     let val = self
                         .stack
@@ -105,18 +106,14 @@ impl VM {
                         .clone();
                     self.stack.set(absolute_index, val);
                 }
-                crate::chunk::Operation::Equal => {
+                Operation::Equal => {
                     let b = self.stack.pop()?;
                     let a = self.stack.pop()?;
                     self.stack.push(Value::Boolean(a == b));
                 }
-                crate::chunk::Operation::Greater => {
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b))?
-                }
-                crate::chunk::Operation::Less => {
-                    VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b))?
-                }
-                crate::chunk::Operation::Add => match self.stack.peek()? {
+                Operation::Greater => VM::binary(&mut self.stack, |a, b| Value::Boolean(a > b))?,
+                Operation::Less => VM::binary(&mut self.stack, |a, b| Value::Boolean(a < b))?,
+                Operation::Add => match self.stack.peek()? {
                     Value::Number(_) => VM::binary(&mut self.stack, |a, b| Value::Number(a + b))?,
                     Value::String(_) => {
                         let b = self.stack.pop_string()?;
@@ -127,28 +124,20 @@ impl VM {
                     }
                     v => Err(format!("Can't add the operand {:?}", v))?,
                 },
-                crate::chunk::Operation::Substract => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?
-                }
-
-                crate::chunk::Operation::Multiply => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?
-                }
-
-                crate::chunk::Operation::Divide => {
-                    VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?
-                }
-                crate::chunk::Operation::Not => {
+                Operation::Substract => VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?,
+                Operation::Multiply => VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?,
+                Operation::Divide => VM::binary(&mut self.stack, |a, b| Value::Number(a / b))?,
+                Operation::Not => {
                     let old = self.stack.pop()?;
                     let new = old.is_falsey();
                     self.stack.push(Value::Boolean(new));
                 }
-                crate::chunk::Operation::Negate => {
+                Operation::Negate => {
                     let n = self.stack.pop_number()?;
                     let res = -n;
                     self.stack.push(Value::Number(res));
                 }
-                crate::chunk::Operation::Print => {
+                Operation::Print => {
                     writeln!(
                         output,
                         "{}",
@@ -156,21 +145,25 @@ impl VM {
                     )
                     .map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
                 }
-                crate::chunk::Operation::Return => {
+                Operation::Return => {
                     // match self.stack.pop() {
                     //     Some(val) => ret = InterpretResult::Ok(val),
                     //     None => ret = InterpretResult::Ok(Value::Nil),
                     // }
                     return Ok(());
                 }
-                crate::chunk::Operation::JumpIfFalse(offset) => {
+                Operation::JumpIfFalse(offset) => {
                     let exp = self.stack.peek()?; //.expect("Missing the if expression");
                     if exp.is_falsey() {
                         frame.ip += offset;
                     }
                 }
-                crate::chunk::Operation::Jump(offset) => frame.ip += offset,
-                crate::chunk::Operation::Loop(offset) => frame.ip -= offset,
+                Operation::Jump(offset) => frame.ip += offset,
+                Operation::Loop(offset) => frame.ip -= offset,
+                Operation::Call(arg_count) => {
+                    let callee = self.stack.peek_many(*arg_count as usize)?.clone();
+                    self.call_value(&callee, *arg_count, output)?;
+                }
             }
         }
     }
@@ -184,5 +177,19 @@ impl VM {
         let result = implementation(a, b);
         stack.push(result);
         Ok(())
+    }
+
+    fn call_value<W: Write>(&mut self, callee: &Value, arg_count: u8, output: &mut W) -> InterpretResult<()> {
+        match callee {
+            Value::Function(fun) => self.call(fun, arg_count, output),
+            other => Err(format!(
+                "Expected a function or a class to call, but found {}",
+                other
+            )),
+        }
+    }
+
+    fn call<W: Write>(&mut self, fun: &ObjFunction, arg_count: u8, output: &mut W) -> InterpretResult<()> {
+        self.run(fun, output)
     }
 }

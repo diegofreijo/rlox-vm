@@ -54,4 +54,8 @@ impl Stack {
             "Tried to peek an empty stack".to_string(),
         )
     }
+
+    pub fn peek_many(&self, count: usize) -> InterpretResult<&Value> {
+        self.get( self.values.len() - 1 - count)
+    }
 }

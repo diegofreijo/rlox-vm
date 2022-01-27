@@ -444,6 +444,7 @@ impl<'a> Compiler<'a> {
             TokenType::LessEqual => self.binary(frame),
             TokenType::And => self.and(frame),
             TokenType::Or => self.or(frame),
+            TokenType::LeftParen => self.call(frame),
             _ => (), //panic!("Expect expresion"),
         }
     }
@@ -668,7 +669,10 @@ impl<'a> Compiler<'a> {
         if !self.check(TokenType::RightParen) {
             loop {
                 frame.arity += 1;
-                let parameter_name = self.parse_variable("Expect parameter name.");
+
+                // TODO: I don't do anything with the parameters because I'm not validating
+                // local variables with markInitialized like the book does.
+                let _parameter_name = self.parse_variable("Expect parameter name.");
                 // self.define_variable(parameter_name, &mut frame);
                 if !self.matches(TokenType::Comma) {
                     break;
@@ -683,11 +687,33 @@ impl<'a> Compiler<'a> {
 
         frame
     }
+
+    fn call(&mut self, frame: &mut ObjFunction) {
+        let arg_count = self.argument_list(frame);
+        frame.chunk.emit(Operation::Call(arg_count));
+    }
+
+    fn argument_list(&mut self,  frame: &mut ObjFunction) -> u8 {
+        let mut ret = 0;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.expression(frame);
+                ret += 1;
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        ret
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{chunk::Operation, value::Value};
+    use std::rc::Rc;
+
+    use crate::{chunk::Operation, value::Value, object::ObjFunction};
 
     use super::Compiler;
 
@@ -1077,6 +1103,28 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn functions() {
+        let mut pepe = ObjFunction::new("pepe");
+        pepe.chunk.emit_many(&mut vec![
+            Operation::Constant(0),
+            Operation::Print,
+        ]);
+        pepe.chunk.add_constant(Value::Number(1.0));
+
+        assert_chunk(
+            "fun pepe() { print 1; }",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("pepe".to_string()),
+                // // Body
+            ],
+            vec![Value::Function(Rc::from(pepe))],
+        );
+    }
+
     //////////////////////////
 
     fn assert_expression(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {
@@ -1091,8 +1139,8 @@ mod tests {
         let mut compiler = Compiler::from_source(&source2);
         let frame = compiler.compile();
 
-        assert!(!compiler.had_error, "\nsource: {}", source);
-        assert_eq!(frame.chunk.code, operations, "\nsource: {}", source);
-        assert_eq!(frame.chunk.constants, constants, "\nsource: {}", source);
+        assert!(!compiler.had_error, "\nCOMPILER ERROR for source: {}", source);
+        assert_eq!(frame.chunk.code, operations, "\nOPERATIONS failed for source: {}", source);
+        assert_eq!(frame.chunk.constants, constants, "\nCONSTANTS failed for source:\n\t{}", source);
     }
 }

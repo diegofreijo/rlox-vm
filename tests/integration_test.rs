@@ -50,11 +50,11 @@ fn runtime_errors() {
 #[test]
 fn functions() {
     assert_script_output(
-        "fun pepe() {
-  print 1;
-}
-
-print pepe;",
+        "fun pepe() { print 1; } print pepe;",
         "<fn 'pepe'>",
+    );
+    assert_script_output(
+        "fun pepe() { print 1; } pepe();",
+        "1",
     );
 }

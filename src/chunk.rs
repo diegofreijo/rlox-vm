@@ -28,6 +28,8 @@ pub enum Operation {
     JumpIfFalse(usize),
     Loop(usize),
     Jump(usize),
+
+    Call(u8),
     
 	Return,
 }
@@ -49,7 +51,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
     pub code: Vec<Operation>,
     pub constants: Vec<Value>,
@@ -90,6 +92,10 @@ impl Chunk {
 
     pub fn emit(&mut self, op: Operation) {
         self.code.push(op);
+    }
+
+    pub fn emit_many(&mut self, ops: &mut Vec<Operation>) {
+        self.code.append(ops);
     }
 
     pub fn emit_constant(&mut self, val: Value) {
