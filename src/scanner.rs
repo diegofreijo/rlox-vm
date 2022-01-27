@@ -3,6 +3,7 @@ use peekmore::{PeekMore, PeekMoreIterator};
 use crate::token::{Token, TokenResult, TokenType};
 use std::str::Chars;
 
+#[derive(Debug)]
 pub struct Scanner<'a> {
     source: &'a String,
     chars: PeekMoreIterator<Chars<'a>>,

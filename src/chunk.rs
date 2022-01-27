@@ -51,7 +51,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Chunk {
     pub code: Vec<Operation>,
     pub constants: Vec<Value>,

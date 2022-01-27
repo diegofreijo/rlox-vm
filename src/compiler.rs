@@ -64,6 +64,7 @@ impl Precedence {
     }
 }
 
+#[derive(Debug)]
 struct Local {
     pub name: String,
     pub depth: i8,
@@ -74,6 +75,7 @@ enum FunctionType {
     Script,
 }
 
+#[derive(Debug)]
 pub struct Compiler<'a> {
     // frames: Vec<ObjFunction>,
     // function_type: FunctionType,
@@ -371,7 +373,10 @@ impl<'a> Compiler<'a> {
     fn error_at(&mut self, line: i32, message: &str) {
         if !self.panic_mode {
             self.panic_mode = true;
-            println!("[line {}] Error: {}", line, message);
+            println!("
+[line {}] Error: {}
+Compiler state: {:#?}
+", line, message, self);
             self.had_error = true;
         }
     }
@@ -463,6 +468,7 @@ impl<'a> Compiler<'a> {
             TokenType::LessEqual => Precedence::Comparison,
             TokenType::And => Precedence::And,
             TokenType::Or => Precedence::Or,
+            TokenType::LeftParen => Precedence::Call,
             _ => Precedence::None,
         }
     }
@@ -704,7 +710,7 @@ impl<'a> Compiler<'a> {
                 }
             }
         }
-
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.");
         ret
     }
 }
@@ -1106,6 +1112,7 @@ mod tests {
 
     #[test]
     fn functions() {
+        // Definition of pepe, will use it on the tests
         let mut pepe = ObjFunction::new("pepe");
         pepe.chunk.emit_many(&mut vec![
             Operation::Constant(0),
@@ -1119,9 +1126,22 @@ mod tests {
                 // Definition
                 Operation::Constant(0),
                 Operation::DefineGlobal("pepe".to_string()),
-                // // Body
             ],
-            vec![Value::Function(Rc::from(pepe))],
+            vec![Value::Function(Rc::from(pepe.clone()))],
+        );
+
+        assert_chunk(
+            "fun pepe() { print 1; } pepe();",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("pepe".to_string()),
+                // Call
+                Operation::GetGlobal("pepe".to_string()),
+                Operation::Call(0),
+                Operation::Pop,
+            ],
+            vec![Value::Function(Rc::from(pepe.clone()))],
         );
     }
 

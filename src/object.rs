@@ -1,6 +1,6 @@
 use crate::chunk::Chunk;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjFunction {
     pub arity: u8,
     pub chunk: Chunk,
