@@ -41,7 +41,7 @@ fn repl() {
         if !compiler.had_error {
             let result = vm.run(&frame, &mut stdout);
             if let Err(msg) = result {
-                println!("[Runime Error] {}", msg);
+                println!("[Runime Error] {:?}", msg);
             }
         } else {
             println!("Compiler error!");

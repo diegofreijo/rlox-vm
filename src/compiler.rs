@@ -1226,6 +1226,44 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn recursive_functions() {
+        // Definition of add, will use it on the tests
+        let mut fact = ObjFunction::new("fact");
+        fact.arity = 1;
+        fact.chunk.emit_many(&mut vec![
+            Operation::GetLocal(0),
+            Operation::GetGlobal("fact".to_string()),
+            Operation::GetLocal(0),
+            Operation::Constant(0),
+            Operation::Substract,
+            Operation::Call(1),
+            Operation::Multiply,
+            Operation::Return,
+            Operation::Nil,
+            Operation::Return,
+        ]);
+        fact.chunk.add_constant(Value::Number(1.0));
+
+        assert_chunk(
+            "fun fact(n) { return n * fact(n-1); } print fact(5);",
+            vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("fact".to_string()),
+                // Call
+                Operation::GetGlobal("fact".to_string()),
+                Operation::Constant(1),
+                Operation::Call(1),
+                // Print
+                Operation::Print,
+            ],
+            vec![Value::Function(Rc::from(fact.clone())), Value::Number(5.0)],
+        );
+    }
+
+
     #[test]
     fn native_functions() {
         assert_chunk(

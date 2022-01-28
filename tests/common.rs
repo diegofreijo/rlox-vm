@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use rlox_vm::{compiler::Compiler, vm::VM};
+use rlox_vm::{compiler::Compiler, vm::{VM, RuntimeError}};
 
 #[derive(Debug)]
 pub struct Output {
@@ -68,7 +68,8 @@ pub fn assert_script_error(script_source: &str, expected_error_message: &str) {
 	let mut stdout = Output::new();
 	
 	let result = vm.run(&frame, &mut stdout);
-    let msg = result.expect_err("This script should have failed");
-
-	assert_eq!(msg.trim_end_matches("\n"), expected_error_message);
+    match result.expect_err("This script should have failed") {
+        RuntimeError::Other(msg) =>assert_eq!(msg.trim_end_matches("\n"), expected_error_message),
+        err => panic!("Not the expected error: {:?}", err),
+    }
 }

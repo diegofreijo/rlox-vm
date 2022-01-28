@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
-use crate::{value::{Value},object::ObjString, vm::InterpretResult};
+use crate::{value::{Value},object::ObjString, vm::{InterpretResult, RuntimeError}};
 
+#[derive(Debug)]
 pub struct Stack {
     values: Vec<Value>,
 }
@@ -17,7 +18,7 @@ impl Stack {
 
     pub fn pop(&mut self) -> InterpretResult<Value> {
         self.values.pop().ok_or(
-            "Tried to pop an empty stack.".to_string(),
+            RuntimeError::new("Tried to pop an empty stack.")
         )
     }
 
@@ -25,7 +26,7 @@ impl Stack {
         match self.pop()? {
             Value::Number(n) => Ok(n),
             v => Err(
-                format!("Expected to pop a number but found '{}'.", v).to_string(),
+                RuntimeError::new(&format!("Expected to pop a number but found '{}'.\n{:#?}", v, self))
             ),
         }
     }
@@ -34,14 +35,14 @@ impl Stack {
         match self.pop()? {
             Value::String(s) => Ok(s),
             v => Err(
-                format!("Expected to pop a string but found '{}'.", v).to_string(),
+                RuntimeError::new(&format!("Expected to pop a string but found '{}'.", v))
             ),
         }
     }
 
     pub fn get(&self, index: usize) -> InterpretResult<&Value> {
         self.values.get(index).ok_or(
-            format!("No value found at index {}.", index).to_string(),
+            RuntimeError::new(&format!("No value found at index {}.", index))
         )
     }
 
@@ -51,11 +52,15 @@ impl Stack {
 
     pub fn peek(&self) -> InterpretResult<&Value> {
         self.values.last().ok_or(
-            "Tried to peek an empty stack".to_string(),
+            RuntimeError::new("Tried to peek an empty stack"),
         )
     }
 
     pub fn peek_many(&self, count: usize) -> InterpretResult<&Value> {
         self.get( self.values.len() - 1 - count)
+    }
+
+    pub fn contents(&self) -> &Vec<Value> {
+        &self.values
     }
 }

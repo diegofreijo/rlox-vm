@@ -2,12 +2,25 @@ use std::{collections::HashMap, io::Write, rc::Rc};
 
 use crate::{
     chunk::{IdentifierName, Operation},
-    object::{ObjFunction, ObjString, ObjNative},
+    native::clock,
+    object::{ObjFunction, ObjNative, ObjString},
     stack::Stack,
-    value::Value, native::clock,
+    value::Value,
 };
 
-pub type InterpretResult<V> = Result<V, String>;
+#[derive(Debug)]
+pub enum RuntimeError {
+    NoMoreOperations(usize),
+    Other(String),
+}
+
+impl RuntimeError {
+    pub fn new(message: &str) -> Self {
+        Self::Other(message.to_string())
+    }
+}
+
+pub type InterpretResult<V> = Result<V, RuntimeError>;
 
 #[derive(Clone)]
 struct CallFrame<'a> {
@@ -39,16 +52,11 @@ impl VM {
             globals: HashMap::new(),
             call_stack: vec![],
         };
-
-        ret.define_native("clock", clock).expect("Unexpected error defining the native function");
-
+        ret.define_native("clock", clock).unwrap();
         ret
     }
 
     pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
-        // self.frames = vec![CallFrame::new(function)];
-        // let mut frame = self.frames.first_mut().ok_or("This can't happen ever")?;
-
         let mut frame = CallFrame::new(function, self.call_stack.len());
         self.call_stack.push(function.name.clone());
 
@@ -56,15 +64,14 @@ impl VM {
         let chunk = &frame.function.chunk;
 
         loop {
-            let op = code
-                .get(frame.ip)
-                .ok_or(&format!("Operation not found. ip: {}", frame.ip))?;
+            let op = code.get(frame.ip)
+                .ok_or(RuntimeError::NoMoreOperations(frame.ip))?;
             frame.ip += 1;
 
             #[cfg(feature = "trace")]
             {
                 writeln!(output, "          {:?}", self.stack);
-                op.disassemble(&chunk, _ip);
+                op.disassemble(&chunk, frame.ip - 1);
             }
 
             match op {
@@ -82,7 +89,7 @@ impl VM {
                     let val = self
                         .globals
                         .get(name)
-                        .ok_or(&format!("Undefined variable '{}'", name))?;
+                        .ok_or(RuntimeError::new(&format!("Undefined variable '{}'", name)))?;
                     self.stack.push(val.clone());
                 }
                 Operation::DefineGlobal(name) => {
@@ -90,7 +97,7 @@ impl VM {
                 }
                 Operation::SetGlobal(name) => {
                     if !self.globals.contains_key(name) {
-                        return Err(format!("Undefined variable '{}'", name));
+                        return Err(RuntimeError::new(&format!("Undefined variable '{}'", name)));
                     }
 
                     self.globals
@@ -130,7 +137,7 @@ impl VM {
                         let value = Value::String(Rc::from(ObjString::from_owned(result)));
                         self.stack.push(value);
                     }
-                    v => Err(format!("Can't add the operand {:?}", v))?,
+                    v => Err(RuntimeError::new(&format!("Can't add the operand {:?}", v)))?,
                 },
                 Operation::Substract => VM::binary(&mut self.stack, |a, b| Value::Number(a - b))?,
                 Operation::Multiply => VM::binary(&mut self.stack, |a, b| Value::Number(a * b))?,
@@ -151,7 +158,12 @@ impl VM {
                         "{}",
                         self.stack.pop()? // .expect("Tried to print a non-existing value")
                     )
-                    .map_err(|x| format!("Unexpected error while printing to output: {}", x))?;
+                    .map_err(|x| {
+                        RuntimeError::new(&format!(
+                            "Unexpected error while printing to output: {}",
+                            x
+                        ))
+                    })?;
                 }
                 Operation::Return => {
                     // let result = self.stack.pop()?;
@@ -192,23 +204,64 @@ impl VM {
         output: &mut W,
     ) -> InterpretResult<()> {
         match callee {
-            Value::Function(fun) => self.run(fun, output),
+            Value::Function(fun) => {
+                self.run(fun, output)?;
+                // self.stack.pop()?;
+                Ok(())
+            }
             Value::Native(native) => {
                 let result = (native.function)();
                 self.stack.push(Value::Number(result));
                 Ok(())
-            },
-            other => Err(format!(
+            }
+            other => Err(RuntimeError::new(&format!(
                 "Expected a function or a class to call, but found {}",
                 other
-            )),
+            ))),
         }
     }
 
-    fn define_native(&mut self, name: &str, function: fn()->f64) -> InterpretResult<()> {
+    fn define_native(&mut self, name: &str, function: fn() -> f64) -> InterpretResult<()> {
         let obj_native = ObjNative::new(name, function);
         let native = Value::Native(obj_native);
         self.globals.insert(name.to_string(), native);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VM;
+    use crate::{chunk::Operation, object::ObjFunction, value::Value, vm::RuntimeError};
+    use std::io;
+
+    #[test]
+    fn constants() {
+        assert_stack(&mut vec![Operation::True], vec![Value::Boolean(true)]);
+    }
+
+    ////////////////
+
+    fn assert_stack(operations: &mut Vec<Operation>, stack: Vec<Value>) {
+        let mut function = ObjFunction::new("test");
+        function.chunk.emit_many(operations);
+
+        let mut stdout = io::stdout();
+
+        let mut vm = VM::new();
+        match vm.run(&function, &mut stdout) {
+            Ok(_) => panic!("Expected the VM to halt but it didn't"),
+            Err(RuntimeError::NoMoreOperations(_)) => {
+                assert_eq!(
+                    vm.stack.contents(),
+                    &stack,
+                    "Stack contents are not the same"
+                )
+            }
+            Err(other) => panic!(
+                "Expected the VM to halt but another error happened: {:?}",
+                other
+            ),
+        }
     }
 }

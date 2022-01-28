@@ -63,8 +63,6 @@ fn procedures() {
     );
 }
 
-
-
 #[test]
 fn functions() {
     assert_script_output(
@@ -75,16 +73,34 @@ fn functions() {
         "fun add(a, b) { return a + b; } print add(2,3);",
         "5",
     );
-        assert_script_output(
-        "
-fun fib(n) {
-  if (n < 2) return n;
-  return fib(n - 2) + fib(n - 1);
 }
 
-print fib(5);",
-        "no se",
+
+#[test]
+fn recursive_functions() {
+    assert_script_output(
+        "
+fun fact(n) { 
+    if(n <= 1) { 
+        return 1; 
+    } else { 
+        return n * fact(n-1); 
+    } 
+} 
+
+print fact(5);",
+        "120",
     );
+//     assert_script_output(
+//         "
+// fun fib(n) {
+//   if (n < 2) return n;
+//   return fib(n - 2) + fib(n - 1);
+// }
+
+// print fib(5);",
+//         "no se",
+//     );
 }
 
 
