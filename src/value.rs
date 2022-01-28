@@ -1,6 +1,5 @@
 use std::{rc::Rc, fmt::{Display}};
-
-use crate::object::{ObjString, ObjFunction};
+use crate::object::{ObjString, ObjFunction, ObjNative};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -9,6 +8,7 @@ pub enum Value {
     Number(f64),
     String(Rc<ObjString>),
     Function(Rc<ObjFunction>),
+    Native(ObjNative),
 }
 
 impl PartialEq for Value {
@@ -38,14 +38,6 @@ impl Value {
             _ => false,
         }
     }
-
-    // pub fn expect_number(&self) -> Result<&f64, InterpretResult> {
-    //     match self {
-    //         Value::Number(n) => Ok(n),
-    //         other => Err(InterpretResult::RuntimeError(format!("Expected a number, found {:?}", other))),
-    //     }
-    // }
-
 }
 
 impl Display for Value {
@@ -56,16 +48,7 @@ impl Display for Value {
             Value::Number(n) => f.write_str(&n.to_string()),
             Value::String(obj) => f.write_str(&obj.value),
             Value::Function(of) => f.write_str(&format!("<fn '{}'>", of.name)),
+            Value::Native(native) => f.write_str(&format!("<native '{}'>", native.name)),
         }
     }
 }
-
-impl Value {
- 
-}
-
-// impl InterpreterValidator for Option<Value> {
-//     fn expect_number(&self) {
-        
-//     }
-// }

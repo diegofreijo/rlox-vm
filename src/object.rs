@@ -9,10 +9,26 @@ pub struct ObjFunction {
 
 impl ObjFunction {
     pub fn new(name: &str) -> Self {
-        ObjFunction {
+        Self {
             arity: 0,
             chunk: Chunk::new(),
             name: String::from(name),
+        }
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct ObjNative {
+    pub name: String,
+    pub function: fn() -> f64,
+}
+
+impl ObjNative {
+    pub fn new(name: &str, function: fn() -> f64) -> Self {
+        Self {
+            name: String::from(name),
+            function,
         }
     }
 }

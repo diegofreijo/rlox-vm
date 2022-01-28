@@ -1226,6 +1226,20 @@ mod tests {
         );
     }
 
+    #[test]
+    fn native_functions() {
+        assert_chunk(
+            "print clock();",
+            vec![
+                // Definition
+                Operation::GetGlobal("clock".to_string()),
+                Operation::Call(0),
+                Operation::Print,
+            ],
+            vec![],
+        );
+    }
+
     //////////////////////////
 
     fn assert_expression(source: &str, mut operations: Vec<Operation>, constants: Vec<Value>) {

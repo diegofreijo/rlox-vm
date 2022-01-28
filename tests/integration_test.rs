@@ -75,4 +75,39 @@ fn functions() {
         "fun add(a, b) { return a + b; } print add(2,3);",
         "5",
     );
+        assert_script_output(
+        "
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+print fib(5);",
+        "no se",
+    );
+}
+
+
+
+#[test]
+fn native_functions() {
+    assert_script_output(
+        "print clock;",
+        "<native 'clock'>",
+    );
+    // assert_script_output(
+    //     "print clock();",
+    //     "",
+    // );
+
+/*
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+print fib(5);
+var start = clock();
+print clock() - start;
+ */
 }

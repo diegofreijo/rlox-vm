@@ -6,3 +6,4 @@ pub mod vm;
 pub mod value;
 pub mod stack;
 pub mod object;
+pub mod native;

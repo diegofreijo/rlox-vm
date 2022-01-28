@@ -2,9 +2,9 @@ use std::{collections::HashMap, io::Write, rc::Rc};
 
 use crate::{
     chunk::{IdentifierName, Operation},
-    object::{ObjFunction, ObjString},
+    object::{ObjFunction, ObjString, ObjNative},
     stack::Stack,
-    value::Value,
+    value::Value, native::clock,
 };
 
 pub type InterpretResult<V> = Result<V, String>;
@@ -34,11 +34,15 @@ pub struct VM {
 
 impl VM {
     pub fn new() -> Self {
-        VM {
+        let mut ret = VM {
             stack: Stack::new(),
             globals: HashMap::new(),
             call_stack: vec![],
-        }
+        };
+
+        ret.define_native("clock", clock).expect("Unexpected error defining the native function");
+
+        ret
     }
 
     pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
@@ -189,6 +193,11 @@ impl VM {
     ) -> InterpretResult<()> {
         match callee {
             Value::Function(fun) => self.run(fun, output),
+            Value::Native(native) => {
+                let result = (native.function)();
+                self.stack.push(Value::Number(result));
+                Ok(())
+            },
             other => Err(format!(
                 "Expected a function or a class to call, but found {}",
                 other
@@ -196,7 +205,10 @@ impl VM {
         }
     }
 
-    // fn call<W: Write>(&mut self, fun: &ObjFunction, arg_count: u8, output: &mut W) -> InterpretResult<()> {
-    //     self.run(fun, output)
-    // }
+    fn define_native(&mut self, name: &str, function: fn()->f64) -> InterpretResult<()> {
+        let obj_native = ObjNative::new(name, function);
+        let native = Value::Native(obj_native);
+        self.globals.insert(name.to_string(), native);
+        Ok(())
+    }
 }
