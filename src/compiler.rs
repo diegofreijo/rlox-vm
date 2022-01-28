@@ -1229,25 +1229,51 @@ mod tests {
 
     #[test]
     fn recursive_functions() {
-        // Definition of add, will use it on the tests
+        // Recursive definition of fact, will use it on the tests
         let mut fact = ObjFunction::new("fact");
         fact.arity = 1;
         fact.chunk.emit_many(&mut vec![
+            // Condition
+            Operation::GetLocal(0),
+            Operation::Constant(0),
+            Operation::Greater,
+            Operation::Not,
+            Operation::JumpIfFalse(4),
+            // Then
+            Operation::Pop,
+            Operation::Constant(1),
+            Operation::Return,
+            // Else
+            Operation::Jump(9),
+            Operation::Pop,
             Operation::GetLocal(0),
             Operation::GetGlobal("fact".to_string()),
             Operation::GetLocal(0),
-            Operation::Constant(0),
+            Operation::Constant(2),
             Operation::Substract,
             Operation::Call(1),
             Operation::Multiply,
             Operation::Return,
+            // Cleanup
             Operation::Nil,
             Operation::Return,
         ]);
         fact.chunk.add_constant(Value::Number(1.0));
+        fact.chunk.add_constant(Value::Number(1.0));
+        fact.chunk.add_constant(Value::Number(1.0));
 
         assert_chunk(
-            "fun fact(n) { return n * fact(n-1); } print fact(5);",
+            "
+fun fact(n) {
+    if(n <= 1) { 
+        return 1; 
+    } else { 
+        return n * fact(n-1); 
+    } 
+} 
+
+print fact(5);
+            ",
             vec![
                 // Definition
                 Operation::Constant(0),

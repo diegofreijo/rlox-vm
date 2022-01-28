@@ -1,4 +1,4 @@
-use crate::chunk::Chunk;
+use crate::chunk::{Chunk, Operation};
 
 #[derive(Debug, Clone)]
 pub struct ObjFunction {
@@ -14,6 +14,12 @@ impl ObjFunction {
             chunk: Chunk::new(),
             name: String::from(name),
         }
+    }
+
+    pub fn from_operations(name: &str, operations: &mut Vec<Operation>) -> Self {
+        let mut function = ObjFunction::new(name);
+        function.chunk.emit_many(operations);
+        function
     }
 }
 

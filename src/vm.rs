@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, rc::Rc};
+use std::{collections::HashMap, fmt::Display, io::Write, rc::Rc};
 
 use crate::{
     chunk::{IdentifierName, Operation},
@@ -17,6 +17,18 @@ pub enum RuntimeError {
 impl RuntimeError {
     pub fn new(message: &str) -> Self {
         Self::Other(message.to_string())
+    }
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeError::NoMoreOperations(ip) => f.write_str(&format!(
+                "The VM was halted because there were no more operations at the ip {}",
+                ip
+            )),
+            RuntimeError::Other(msg) => f.write_str(msg),
+        }
     }
 }
 
@@ -64,14 +76,17 @@ impl VM {
         let chunk = &frame.function.chunk;
 
         loop {
-            let op = code.get(frame.ip)
+            let op = code
+                .get(frame.ip)
                 .ok_or(RuntimeError::NoMoreOperations(frame.ip))?;
             frame.ip += 1;
 
             #[cfg(feature = "trace")]
             {
-                writeln!(output, "          {:?}", self.stack);
-                op.disassemble(&chunk, frame.ip - 1);
+                writeln!(output, "============").unwrap();
+                op.disassemble(&chunk, frame.ip - 1, output);
+                writeln!(output, "{}", self.stack).unwrap();
+                output.flush().unwrap();
             }
 
             match op {
@@ -200,7 +215,7 @@ impl VM {
     fn call_value<W: Write>(
         &mut self,
         callee: &Value,
-        arg_count: u8,
+        _arg_count: u8,
         output: &mut W,
     ) -> InterpretResult<()> {
         match callee {
@@ -233,19 +248,84 @@ impl VM {
 mod tests {
     use super::VM;
     use crate::{chunk::Operation, object::ObjFunction, value::Value, vm::RuntimeError};
-    use std::io;
+    use std::{io, rc::Rc};
 
     #[test]
     fn constants() {
-        assert_stack(&mut vec![Operation::True], vec![Value::Boolean(true)]);
+        let function = &mut ObjFunction::from_operations(
+            "test",
+            &mut vec![Operation::Constant(0), Operation::True, Operation::Nil],
+        );
+        function.chunk.add_constant(Value::Number(2.0));
+
+        assert_stack(
+            function,
+            vec![Value::Number(2.0), Value::Boolean(true), Value::Nil],
+        );
+    }
+
+    #[test]
+    fn recursive_functions() {
+        // Recursive definition of fact, will use it on the tests
+        let mut fact = ObjFunction::new("fact");
+        fact.arity = 1;
+        fact.chunk.emit_many(&mut vec![
+            // Condition
+            Operation::GetLocal(0),
+            Operation::Constant(0),
+            Operation::Greater,
+            Operation::Not,
+            Operation::JumpIfFalse(4),
+            // Then
+            Operation::Pop,
+            Operation::Constant(1),
+            Operation::Return,
+            // Else
+            Operation::Jump(9),
+            Operation::Pop,
+            Operation::GetLocal(0),
+            Operation::GetGlobal("fact".to_string()),
+            Operation::GetLocal(0),
+            Operation::Constant(2),
+            Operation::Substract,
+            Operation::Call(1),
+            Operation::Multiply,
+            Operation::Return,
+            // Cleanup
+            Operation::Nil,
+            Operation::Return,
+        ]);
+        fact.chunk.add_constant(Value::Number(1.0));
+        fact.chunk.add_constant(Value::Number(1.0));
+        fact.chunk.add_constant(Value::Number(1.0));
+
+        let main = &mut ObjFunction::from_operations(
+            "main",
+            &mut vec![
+                // Definition
+                Operation::Constant(0),
+                Operation::DefineGlobal("fact".to_string()),
+                // Call
+                Operation::GetGlobal("fact".to_string()),
+                Operation::Constant(1),
+                Operation::Call(1),
+                // Print
+                Operation::Print,
+            ],
+        );
+        main.chunk
+            .add_constant(Value::Function(Rc::from(fact.clone())));
+        main.chunk.add_constant(Value::Number(5.0));
+
+        assert_stack(
+            main,
+            vec![],
+        );
     }
 
     ////////////////
 
-    fn assert_stack(operations: &mut Vec<Operation>, stack: Vec<Value>) {
-        let mut function = ObjFunction::new("test");
-        function.chunk.emit_many(operations);
-
+    fn assert_stack(function: &mut ObjFunction, stack: Vec<Value>) {
         let mut stdout = io::stdout();
 
         let mut vm = VM::new();
@@ -259,7 +339,7 @@ mod tests {
                 )
             }
             Err(other) => panic!(
-                "Expected the VM to halt but another error happened: {:?}",
+                "Expected the VM to halt but another error happened: {}",
                 other
             ),
         }

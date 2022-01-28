@@ -1,28 +1,36 @@
-use crate::value::Value;
+use std::io::Write;
 
+use crate::value::Value;
 
 pub type IdentifierId = usize;
 pub type IdentifierName = String;
 pub type LocalVarIndex = usize;
 
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Operation {
-    Constant(IdentifierId), Nil, True, False,
+    Constant(IdentifierId),
+    Nil,
+    True,
+    False,
     Pop,
-    
+
     GetGlobal(IdentifierName),
     DefineGlobal(IdentifierName),
     SetGlobal(IdentifierName),
-    
+
     GetLocal(LocalVarIndex),
     SetLocal(LocalVarIndex),
 
-    Equal, Greater, Less,
+    Equal,
+    Greater,
+    Less,
 
-	Add, Substract, Multiply, Divide,
+    Add,
+    Substract,
+    Multiply,
+    Divide,
     Not,
-	Negate,
+    Negate,
     Print,
 
     JumpIfFalse(usize),
@@ -30,23 +38,32 @@ pub enum Operation {
     Jump(usize),
 
     Call(u8),
-    
-	Return,
+
+    Return,
 }
 
 impl Operation {
-    pub fn disassemble(&self, chunk: &Chunk, offset: usize) {
-        print!("{:04} ", offset);
-		if offset > 0 && chunk.lines[offset] == chunk.lines[offset-1] {
-			print!("   | ");
-		} else {
-			print!("{:4} ", chunk.lines[offset]);
-		}
+    pub fn disassemble<W: Write>(
+        &self,
+        chunk: &Chunk,
+        offset: usize,
+        output: &mut W,
+    ) -> core::result::Result<(), std::io::Error> {
+        write!(output, "{:04} ", offset)?;
+        if offset > 0 {
+            write!(output, "   | ")?;
+        }
+        // else {
+        // 	print!("{:4} ", chunk.lines[offset]);
+        // }
         match self {
-            Operation::Constant(constant_offset) => {
-                println!("Constant	{} '{:?}'", constant_offset, &chunk.constants[*constant_offset])
-            }
-            op => println!("{:?}", op),
+            Operation::Constant(constant_offset) => writeln!(
+                output,
+                "Constant	{} '{:?}'",
+                constant_offset, &chunk.constants[*constant_offset]
+            ),
+
+            op => writeln!(output, "{:?}", op),
         }
     }
 }
@@ -55,7 +72,7 @@ impl Operation {
 pub struct Chunk {
     pub code: Vec<Operation>,
     pub constants: Vec<Value>,
-	lines: Vec<u32>
+    lines: Vec<u32>,
 }
 
 impl Chunk {
@@ -69,7 +86,7 @@ impl Chunk {
 
     pub fn write(&mut self, op: Operation, line: u32) {
         self.code.push(op);
-		self.lines.push(line);
+        self.lines.push(line);
     }
 
     pub fn add_constant(&mut self, value: Value) -> IdentifierId {
@@ -77,18 +94,18 @@ impl Chunk {
         self.constants.len() - 1
     }
 
-	pub fn read_constant(&self, coffset: usize) -> &Value {
-		&self.constants[coffset]
-	}
-
-    pub fn disassemble(&self, name: &str) {
-        println!("== {} ==", name);
-        let mut offset: usize = 0;
-        for op in &self.code {
-            op.disassemble(self, offset);
-            offset += 1;
-        }
+    pub fn read_constant(&self, coffset: usize) -> &Value {
+        &self.constants[coffset]
     }
+
+    // pub fn disassemble(&self, name: &str) {
+    //     println!("== {} ==", name);
+    //     let mut offset: usize = 0;
+    //     for op in &self.code {
+    //         op.disassemble(self, offset);
+    //         offset += 1;
+    //     }
+    // }
 
     pub fn emit(&mut self, op: Operation) {
         self.code.push(op);
