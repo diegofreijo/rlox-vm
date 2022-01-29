@@ -91,16 +91,16 @@ fun fact(n) {
 print fact(5);",
         "120",
     );
-//     assert_script_output(
-//         "
-// fun fib(n) {
-//   if (n < 2) return n;
-//   return fib(n - 2) + fib(n - 1);
-// }
+    assert_script_output(
+        "
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
+}
 
-// print fib(5);",
-//         "no se",
-//     );
+print fib(6);",
+        "8",
+    );
 }
 
 
