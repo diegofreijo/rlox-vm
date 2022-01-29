@@ -76,32 +76,32 @@ fn functions() {
 }
 
 
-// #[test]
-// fn recursive_functions() {
+#[test]
+fn recursive_functions() {
+    assert_script_output(
+        "
+fun fact(n) {
+    if(n <= 1) { 
+        return 1; 
+    } else { 
+        return n * fact(n-1); 
+    } 
+} 
+
+print fact(5);",
+        "120",
+    );
 //     assert_script_output(
 //         "
-// fun fact(n) {
-//     if(n <= 1) { 
-//         return 1; 
-//     } else { 
-//         return n * fact(n-1); 
-//     } 
-// } 
-
-// print fact(5);",
-//         "120",
-//     );
-// //     assert_script_output(
-// //         "
-// // fun fib(n) {
-// //   if (n < 2) return n;
-// //   return fib(n - 2) + fib(n - 1);
-// // }
-
-// // print fib(5);",
-// //         "no se",
-// //     );
+// fun fib(n) {
+//   if (n < 2) return n;
+//   return fib(n - 2) + fib(n - 1);
 // }
+
+// print fib(5);",
+//         "no se",
+//     );
+}
 
 
 

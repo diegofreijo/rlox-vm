@@ -1,7 +1,6 @@
 extern crate rlox_vm;
 
-use rlox_vm::compiler::Compiler;
-use rlox_vm::vm::VM;
+use rlox_vm::{ interpreter::Interpreter};
 use std::{io::{self, Write}, env, fs};
 
 fn main() {
@@ -20,26 +19,14 @@ fn run_file(path: &str) {
 }
 
 fn run_source(raw_source: &str) {
-    let mut vm = VM::new();
-    let mut stdout = io::stdout();
-    let source = String::from(raw_source);
-    
-    let mut compiler = Compiler::from_source(&source);
-    let frame = compiler.compile();
-    if !compiler.had_error {
-        let result = vm.run(&frame, &mut stdout);
-        if let Err(msg) = result {
-            println!("[Runime Error] {}", msg);
-        }
-    } else {
-        println!("Compiler error!");
-    }
+    let mut interpreter = Interpreter::new(io::stdout());
+    interpreter.interpret(raw_source);
 }
 
 fn repl() {
-    let mut vm = VM::new();
     let stdin = io::stdin();
-    let mut stdout = io::stdout();
+    let mut interpreter = Interpreter::new(io::stdout());
+
     loop {
         print!("> ");
         io::stdout().flush().expect("Failed flushing to stdout");
@@ -64,16 +51,6 @@ fn repl() {
             }
         }
 
-        let mut compiler = Compiler::from_source(&source);
-        let frame = compiler.compile();
-        if !compiler.had_error {
-            let result = vm.run(&frame, &mut stdout);
-            if let Err(msg) = result {
-                println!("{}", msg);
-                // println!("[Runime Error] {}", msg);
-            }
-        } else {
-            println!("Compiler error!");
-        }
+        interpreter.interpret(&source);
     }
 }

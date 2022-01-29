@@ -7,3 +7,4 @@ pub mod value;
 pub mod stack;
 pub mod object;
 pub mod native;
+pub mod interpreter;

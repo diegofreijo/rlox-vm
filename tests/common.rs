@@ -37,7 +37,7 @@ pub fn assert_expression(exp_source: &str, expected: &str) {
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	vm.run(&frame, &mut stdout).unwrap();
+	vm.run_main(&frame, &mut stdout).unwrap();
 
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
@@ -52,7 +52,7 @@ pub fn assert_script_output(script_source: &str, expected: &str) {
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	vm.run(&frame, &mut stdout).unwrap();
+	vm.run_main(&frame, &mut stdout).unwrap();
 
 	assert_eq!(stdout.contents.trim_end_matches("\n"), expected);
 }
@@ -67,7 +67,7 @@ pub fn assert_script_error(script_source: &str, expected_error_message: &str) {
 	let mut vm = VM::new();
 	let mut stdout = Output::new();
 	
-	let result = vm.run(&frame, &mut stdout);
+	let result = vm.run_main(&frame, &mut stdout);
     match result.expect_err("This script should have failed") {
         RuntimeError::Other(msg) =>assert_eq!(msg.trim_end_matches("\n"), expected_error_message),
         err => panic!("Not the expected error: {:?}", err),

@@ -68,7 +68,12 @@ impl VM {
         ret
     }
 
-    pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
+    pub fn run_main<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
+        self.stack.push(Value::Function(Rc::from(function.clone())));
+        self.run(function, output)
+    }
+
+    fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
         let mut frame = CallFrame::new(function, self.stack.len() - (function.arity as usize));
         self.call_stack.push(function.name.clone());
 
@@ -119,7 +124,7 @@ impl VM {
                         .insert(name.clone(), self.stack.peek()?.clone());
                 }
                 Operation::GetLocal(i) => {
-                    writeln!(output, "frame.first_slot: {}", frame.first_slot);
+                    // writeln!(output, "frame.first_slot: {}", frame.first_slot);
                     let absolute_index = i + frame.first_slot;
                     let val = self
                         .stack
