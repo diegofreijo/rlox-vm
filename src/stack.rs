@@ -73,6 +73,10 @@ impl Stack {
     pub fn contents(&self) -> &Vec<Value> {
         &self.values
     }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
 impl Display for Stack {

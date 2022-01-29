@@ -69,7 +69,7 @@ impl VM {
     }
 
     pub fn run<W: Write>(&mut self, function: &ObjFunction, output: &mut W) -> InterpretResult<()> {
-        let mut frame = CallFrame::new(function, self.call_stack.len());
+        let mut frame = CallFrame::new(function, self.stack.len() - (function.arity as usize));
         self.call_stack.push(function.name.clone());
 
         let code = frame.function.chunk.code();
@@ -119,6 +119,7 @@ impl VM {
                         .insert(name.clone(), self.stack.peek()?.clone());
                 }
                 Operation::GetLocal(i) => {
+                    writeln!(output, "frame.first_slot: {}", frame.first_slot);
                     let absolute_index = i + frame.first_slot;
                     let val = self
                         .stack
@@ -181,8 +182,19 @@ impl VM {
                     })?;
                 }
                 Operation::Return => {
-                    // let result = self.stack.pop()?;
-                    self.call_stack.pop();
+                    let result = self.stack.pop().unwrap();
+
+                    // Pop the arguments from the stack
+                    for _i in 0..function.arity {
+                        self.stack.pop().unwrap();
+                    }
+
+                    // Pop the function from the stack
+                    self.stack.pop().unwrap();
+
+                    // Push the return value
+                    self.stack.push(result);
+
                     return Ok(());
                 }
                 Operation::JumpIfFalse(offset) => {
@@ -221,7 +233,6 @@ impl VM {
         match callee {
             Value::Function(fun) => {
                 self.run(fun, output)?;
-                // self.stack.pop()?;
                 Ok(())
             }
             Value::Native(native) => {
@@ -298,6 +309,7 @@ mod tests {
         fact.chunk.add_constant(Value::Number(1.0));
         fact.chunk.add_constant(Value::Number(1.0));
         fact.chunk.add_constant(Value::Number(1.0));
+
 
         let main = &mut ObjFunction::from_operations(
             "main",
