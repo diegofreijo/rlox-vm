@@ -272,9 +272,6 @@ impl<'a> Scanner<'a> {
 	fn is_alpha(c: char) -> bool {
 		 c == '_' || ('A'..'z').contains(&c)
     }
-
-
-
 }
 
 #[cfg(test)]

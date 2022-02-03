@@ -9,20 +9,6 @@ impl<'a> TokenResult<'a> {
     pub fn invalid() -> Self {
         TokenResult{ line: -1, token_type: TokenType::Error, data: Err(String::from("Invalid")) }
     }
-
-    // pub fn error_message(&self) -> String {
-    //     match self.data {
-    //         Ok(_) => "".to_string(),
-    //         Err(m) => m,
-    //     }
-    // }
-
-    // pub fn is_type(&self, expected: TokenType) -> bool {
-    //     match self.data {
-    //         Ok(_) => todo!(),
-    //         Err(_) => todo!(),
-    //     }
-    // }
 }
 
 #[derive(Clone, Debug)]

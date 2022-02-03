@@ -77,8 +77,6 @@ enum FunctionType {
 
 #[derive(Debug)]
 pub struct Compiler<'a> {
-    // frames: Vec<ObjFunction>,
-    // function_type: FunctionType,
     pub had_error: bool,
     panic_mode: bool,
 
@@ -94,8 +92,6 @@ pub struct Compiler<'a> {
 impl<'a> Compiler<'a> {
     pub fn from_source(source: &'a String) -> Compiler<'a> {
         Compiler {
-            // frames: vec![],
-            // function_type: FunctionType::Script,
             had_error: false,
             panic_mode: false,
 
@@ -143,7 +139,6 @@ impl<'a> Compiler<'a> {
     }
 
     fn number(&mut self, frame: &mut ObjFunction) {
-        // println!("Parsing number");
         let token_data = self.previous.data.as_ref().unwrap();
         let val = token_data.lexeme.parse::<f64>().unwrap();
         frame.chunk.emit_constant(Value::Number(val));
